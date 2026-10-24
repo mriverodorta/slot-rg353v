@@ -35,6 +35,6 @@ The walkthrough uses the actual installer renderer. Feature choices and installa
 
 [Credits and licenses](../CREDITS.md) · [Contributing](../CONTRIBUTING.md) · [Project README](../README.md)
 
-These files are the version-controlled wiki source. They can be read directly on GitHub alongside the code; enabling and publishing the separate GitHub Wiki is a later repository action.
+These files are the version-controlled user guide and can always be read alongside the code. The separate GitHub Wiki uses the same pages, with links rewritten for wiki navigation.
 
 Screens are native **640×480** renders of the pinned frontend/device layer, using games and cartridge artwork from the owner's collection. Connection details and storage capacities are examples. No personal Wi-Fi credentials, SSH keys, ROMs, BIOS or save files are included. See [media provenance and reproduction](Media-Production.md).

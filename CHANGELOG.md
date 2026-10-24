@@ -1,6 +1,6 @@
 # RG353V changes
 
-## Unreleased public candidate
+## v0.1.0 — 24 October 2026
 
 - Prepare application state and visible-cartridge pixels alongside RG353V graphics startup; retain exact artwork checks, complete first-shelf rendering and synchronous fallback. Controlled SD tests improved frontend initialization by 126 ms; total boot time remained effectively unchanged in the three-run comparison.
 
@@ -32,6 +32,6 @@
 - Read-only source/payload privacy inventory and local GitHub Wiki export with revision-specific image/source URLs.
 - Public build resources, private development provisioning and release outputs separated; README, wiki and individual upstream credits added.
 
-Public release candidates still require clean-install qualification of the exact release image, source/license checks and a fresh-clone full build. Perfect retains creator ownership and an explicit no-license-specified notice. No public release is published by this entry.
+The published image is the exact qualified `rc-20261023-build4` artifact. Clean Full SD installation, three retained cold starts, game/save/USB/sleep-wake checks, clean source build and privacy/source-material inspections passed. Matching source archives accompany the image. The production signed OTA catalog was fetched and verified by the public SD installation and reported up to date. Perfect retains creator ownership and an explicit no-license-specified notice. Windows hosts and other panel variants remain unqualified.
 
 The original Slot project's changes are documented by [its upstream releases](https://github.com/BrandonKowalski/slot/releases).

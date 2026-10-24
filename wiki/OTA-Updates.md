@@ -2,7 +2,7 @@
 
 ![OTA Updates menu](images/features/updates.png)
 
-The screen above illustrates the menu with example version data. The delivery/rollback path has been tested privately. New builds contain the planned `mriverodorta/slot-rg353v` GitHub feed and publisher public key; hosting and exact public-candidate update/rollback qualification remain pending.
+The screen above illustrates the menu with example version data. The production [OTA channel](https://github.com/mriverodorta/slot-rg353v/releases/tag/ota-stable) is live. The exact public installation fetched its catalog over HTTPS, verified the embedded publisher key and accepted sequence 1 as **up to date**. The first catalog is empty; there is no newer package to install yet. Component catch-up, rollback and OS reboot continuation have separate real-device qualification described below.
 
 OTA uses signed, base-specific changes. It does not run Git on the handheld or replace the SD/eMMC disk image. Installation and partition expansion still use the flashable image.
 
@@ -45,7 +45,7 @@ After reboot, the session restores only its previously enabled Wi-Fi/USB network
 
 The catalog declares final installation identities, module selections and target inventories. An unknown base without a compatible route reports **No supported update path**, not “up to date.” Every supported older version needs a retained exact-base path in the current signed catalog. The client rejects loops and caps a session at 64 steps.
 
-The continuation implementation has host regression coverage and real-device qualification on a private Full TF1 installation. Signed three-step component catch-up, explicit rollback and automatic rollback after a deliberately failing launcher passed. A subsequent real OS delta rebooted into the corrected SYSTEM, waited through eight deliberate feed failures, then continued to a component update automatically. The OS patch downloaded 2,185,324 bytes versus a 72,198,710-byte full capsule. Original feed/downloads were restored, the disposable component was removed, and all 85 progress files stayed unchanged. The corrected OS was retained on TF1; the older eMMC remained unmounted. Public hosting and the final clean public-image installation remain separate release steps.
+The continuation implementation has host regression coverage and real-device qualification on a private Full TF1 installation. Signed three-step component catch-up, explicit rollback and automatic rollback after a deliberately failing launcher passed. A subsequent real OS delta rebooted into the corrected SYSTEM, waited through eight deliberate feed failures, then continued to a component update automatically. The OS patch downloaded 2,185,324 bytes versus a 72,198,710-byte full capsule. Original feed/downloads were restored, the disposable component was removed, and all 85 progress files stayed unchanged. The corrected OS was retained on TF1; the older eMMC remained unmounted. The exact public image subsequently passed clean Full SD installation and its factory feed successfully verified the production GitHub catalog; the component/OS trials above used the earlier private test feeds.
 
 ## Building and hosting updates
 
@@ -109,4 +109,4 @@ The initial measured r14b→r15 example reduced the archive from 71,561,485 byte
 
 The owner eMMC qualification also installed the finalized updater as real signed component deltas, exercised the menu's detached systemd job, resumed a real HTTP byte-range download, rejected a corrupted partial file and verified frontend rollback. A subsequent OS update downloaded 5,518,759 bytes instead of the 71,571,677-byte full capsule, rebuilt the target SYSTEM and passed reboot/health confirmation. Kernel and emulator binaries were unchanged in that OS trial. The library comparison preserved all 249 non-settings files. These checks do not qualify every future core/kernel change or every custom installation variant.
 
-Public hosting and fresh-install release qualification remain separate from local implementation/testing. See [Releasing](Releasing.md).
+The first public image and its factory HTTPS feed are now qualified as recorded in [Releasing](Releasing.md). Future component, core and kernel changes still require their own update/rollback and state compatibility checks.
