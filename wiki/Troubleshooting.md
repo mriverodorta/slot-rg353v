@@ -38,6 +38,7 @@ For an unbootable eMMC update, use the known-good TF1 recovery card and hold F a
 
 | Symptom | Check first |
 | --- | --- |
+| TF1 starts Android or never reaches setup | Check the [stock Android/legacy-loader prerequisite](Installation.md#before-starting-stock-android-and-the-legacy-bootloader); F-held SD selection requires our installed loader |
 | A menu option is missing | Was its module selected during setup? Is the console supported by an installed core? |
 | A game is missing | Correct Games folder, uncompressed extension, supported emulator and refreshed library |
 | A shortcut does nothing | Installed module, System → Features restriction and remapping conflict |

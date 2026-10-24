@@ -1,8 +1,24 @@
 # Installation, storage and recovery
 
+## Before starting: stock Android and the legacy bootloader
+
+**An RG353V with stock Android needs additional preparation.** [ROCKNIX's RG353 device guide](https://rocknix.org/devices/anbernic/rg353pmvvs/#installation) says its legacy eMMC bootloader is unsupported and requires erasing Android before SD boot. This applies even if you intend to keep Slot on SD.
+
+The upstream procedure is:
+
+1. Install ADB on the computer. Remove SD cards and enter Android recovery with **Power + Volume Down**.
+2. Connect the handheld's **DC USB-C** port to the computer and run `adb root`.
+3. Back up internal storage before erasing it; the guide uses `adb pull /dev/block/mmcblk0 android.img`.
+4. Follow the linked RG353-specific erase procedure. It targets the **entire internal device**, destroying Android and internal data, despite calling it an Android-partition wipe. It is not a factory reset.
+5. Upstream then inserts a prepared ROCKNIX SD and reboots.
+
+Slot's installer can replace eMMC only **after its TF1 starter has booted**. It cannot clear this prerequisite before startup. The current release's clean-install tests began with an already compatible internal boot chain; a stock-Android-to-Slot conversion has not been separately qualified. Do not erase a working Linux installation just to repeat Android preparation.
+
+The **F-held TF1 override belongs to Slot's installed loader**; do not assume stock Android provides it. ROCKNIX's separate [generic internal installer](https://rocknix.org/play/installtointernal/) lists Qualcomm platforms, not the RG353V/RK3566, and is not this device's procedure. Once Slot setup is running, use its own destination chooser below.
+
 ## Choose a destination
 
-The image starts on a microSD in TF1. Setup can expand that same SD or install the complete system to internal eMMC. The RG353V's eMMC is approximately 32 GB nominal; use the capacity displayed by setup, not a card's advertised size. **Installing to eMMC replaces its existing system and Android.** Back up first.
+After the boot prerequisites above are satisfied, the starter image runs from a microSD in TF1. Setup can expand that same SD or install the complete system to internal eMMC. The RG353V's eMMC is approximately 32 GB nominal; use the capacity displayed by setup, not a card's advertised size. **Installing to eMMC replaces its existing system and Android.** Back up first.
 
 For startup performance, the current system reaches the shelf in **about 4.2–4.3 s when booted from eMMC**, versus **about 5.2 s from the tested TF1 microSD**. SD time depends on the card's speed and quality. These are Linux-entry-to-shelf measurements; the Power/rumble and bootloader interval is separate. See the [controlled comparison](Boot-and-Recovery.md#latest-controlled-restarts).
 
@@ -40,7 +56,7 @@ On a macOS file-open dialog, **Command + Shift + G** opens Go to Folder if you n
 
 ![Choose this SD card](images/setup/01-destination-sd.png)
 
-**Set up this SD card** keeps Slot on the card you just flashed and allocates its remaining space for games. This is the simplest way to try the firmware without replacing an existing internal installation.
+**Set up this SD card** keeps Slot on the card you just flashed and allocates its remaining space for games. This keeps an already compatible internal Linux installation intact. Stock Android still has the prerequisite described above.
 
 ![Choose internal eMMC](images/setup/02-destination-emmc.png)
 

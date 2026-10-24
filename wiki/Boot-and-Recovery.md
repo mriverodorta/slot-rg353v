@@ -113,6 +113,8 @@ The frontend presents 100% once and immediately draws the first scene. In the ca
 
 ## Normal startup
 
+These instructions assume a compatible internal boot chain. Stock Android/legacy-loader devices first need the [RG353V preparation described in Installation](Installation.md#before-starting-stock-android-and-the-legacy-bootloader). Holding F with stock firmware is not a substitute.
+
 With our loader installed, eMMC starts normally without F. Hold F before pressing Power to select the TF1 recovery/setup SD, and keep F held until its splash/setup. An SD installation alongside eMMC can require F on each restart. This is our installed loader's behavior, not a universal factory-ROM shortcut.
 
 First-run clock setup appears before ordinary use. Check the date/time and Miami/Eastern offset, confirm with A, then reach the shelf. After first run, an ejected game returns to the remembered shelf/cartridge. A game left inserted resumes directly on the next start when its resume state is readable. The [save-location policy](Adding-Games.md#save-location) also applies during startup; keep a Game-mode card inserted. Optional services start off unless Developer Mode is enabled.
