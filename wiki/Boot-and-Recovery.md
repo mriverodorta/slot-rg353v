@@ -138,3 +138,10 @@ Keep a known-good recovery SD before changing system/kernel versions. OTA retain
 If eMMC will not boot, use the TF1 recovery card with F. Verify the actual boot disk before attempting any repair. Back up progress and record the build, screen and LED state. An off LED is not always proof the device is fully off; collect logs through USB SSH if available before forcing a restart.
 
 Rockchip USB loader recovery is a separate advanced procedure. It is not USB Storage or USB Networking, and generic raw-flash commands may destroy the wrong disk. Use a reviewed, device-specific recovery procedure.
+
+
+## Public candidate cold-start qualification
+
+The exact PUBLIC `rc-20261023-build4` Full installation was tested with its system on TF1 and the 81-game library on TF2, Save location **Game**, Developer Mode On and USB networking Off. The owner shut down through Slot, waited 15 seconds after the LED went out and powered on holding F. Three distinct retained reports measured **4.880, 5.090 and 4.865 seconds**, averaging **4.945 seconds** from Linux entry to first shelf swap. These exclude physical Power/rumble and the earlier bootloader interval.
+
+Every retained boot reached the shelf with all 81 games and no failed services; Wi-Fi/SSH recovered. The last local snapshot ran at 11 seconds, before Wi-Fi association, and a later check confirmed connectivity. Earlier missing timing reports were replaced with additional starts; no missing values were inferred. The delayed recorder ran after the shelf, saved locally rather than depending on Mac connectivity, and was removed after collection. These SD cold-start measurements complement the earlier eMMC/SD controlled-restart comparison; they are not a new eMMC timing result.
