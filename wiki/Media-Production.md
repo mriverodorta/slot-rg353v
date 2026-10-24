@@ -58,10 +58,9 @@ The boot command reads the sanitized [presentation trace](media/boot-timing.json
 
 The early 0% frame has its own timestamp. The second initramfs draw (31%) is bounded by its begin/end markers, about 37 ms apart; the replay uses the completion bound. The framebuffer-to-GLES ownership transition and physical panel scanout were not filmed. The trace includes the captured black GLES clear and the brief 100% handoff. It neither fills in unshown percentages nor rescales the run to a chosen duration. The GIF rounds absolute boundaries to 10 ms; its 100% interval is 30 ms. The MP4 uses 60 fps rather than 25 fps to retain the short handoff. The final 800 ms shelf hold is outside the measured boot interval. The boot validator checks the milestone plan and renderer hashes against the capture; changing those inputs requires reviewing or recapturing the trace.
 
-Individual commands are `setup`, `frontend`, `boot`, `tour` and `manifest`. Run frontend before boot/tour because those sequences use its captures. Re-render the screen index after changing the asset list:
+Individual commands are `setup`, `frontend`, `boot`, `tour` and `manifest`. Run frontend before boot/tour because those sequences use its captures. Validate the guide and media after changing the asset list:
 
 ```sh
-python3 scripts/index-rg353v-wiki.py
 python3 scripts/check-rg353v-wiki.py
 ```
 

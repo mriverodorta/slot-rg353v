@@ -75,7 +75,7 @@ Settings use the selected wallpaper. Waking from a settings screen intentionally
 | --- | --- |
 | ![Settings](images/features/settings.png) | ![System settings](images/features/system-bottom.png) |
 
-Every screen is linked in the [visual reference](Screens-and-Media.md). The pages below expand the practical steps:
+The pages below illustrate the practical steps:
 
 - [First-run settings](First-Run-and-Settings.md): time, appearance, sound and restrictions.
 - [Connections](Connections.md): Wi-Fi, USB networking, SSH, SMB and USB Storage.

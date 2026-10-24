@@ -15,7 +15,6 @@
 - [Screenshots and Gallery](Screenshots-and-Gallery.md)
 - [OTA updates](OTA-Updates.md)
 - [Troubleshooting](Troubleshooting.md)
-- [All screens and videos](Screens-and-Media.md)
 
 **Building and contributing**
 

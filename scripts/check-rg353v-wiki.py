@@ -63,11 +63,12 @@ for relative,row in manifest['files'].items():
             errors.append('Boot animation duration differs from the captured trace')
 
 catalog=json.loads((ROOT/'ports/rg353v/modules/catalog-v1.json').read_text())
-index=(WIKI/'Screens-and-Media.md').read_text()
+guide=(WIKI/'Setup-and-Modules.md').read_text()
 for module in catalog['modules']:
     asset='images/setup/info-'+module['id']+'.png'
-    if asset not in actual or asset not in index:errors.append('Missing feature explanation: '+module['id'])
-    if module['description'] not in index:errors.append('Stale feature explanation: '+module['id'])
+    if asset not in actual:errors.append('Missing feature explanation image: '+module['id'])
+    if module['label'] not in guide:errors.append('Missing module documentation: '+module['id'])
+    if module['description'] not in guide:errors.append('Stale feature explanation: '+module['id'])
 
 # Reject common accidental private identities in public guide text/metadata.
 for p in list(WIKI.glob('*.md'))+list((WIKI/'media').glob('*.json')):

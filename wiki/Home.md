@@ -31,7 +31,6 @@ The walkthrough uses the actual installer renderer. Feature choices and installa
 | [Build from source](Building.md) | Pins, device layer, caches and image composition |
 | [Private development](Development.md) | Personal Wi-Fi/public SSH key provisioning |
 | [Release procedure](Releasing.md) | Clean image, corresponding source and qualification |
-| [All screens and media](Screens-and-Media.md) | Setup pages, feature illustrations, GIFs and videos |
 
 [Credits and licenses](../CREDITS.md) · [Contributing](../CONTRIBUTING.md) · [Project README](../README.md)
 

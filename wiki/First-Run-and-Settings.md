@@ -62,4 +62,4 @@ Developer Mode is the explicit exception for development across restarts. It req
 
 Open a game, check picture and controls, and use a comfortable volume. Tap F for the pause menu; hold F to eject back to the shelf. Tap Power to sleep and tap again to wake. If you wake from Settings, returning to the shelf is expected.
 
-Next: [add games](Adding-Games.md), [saves and resume](Saves-and-States.md), or [all setup screens](Screens-and-Media.md).
+Next: [add games](Adding-Games.md), [saves and resume](Saves-and-States.md), or [installation](Installation.md).

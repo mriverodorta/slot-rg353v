@@ -19,7 +19,7 @@ On the feature selector, **A or Left/Right** switches the selected feature On/Of
 
 ![Custom module selection](images/setup/06-features-emulators.png)
 
-See the [complete illustrated installation](Installation.md) for the SD/eMMC path. The [visual reference](Screens-and-Media.md#feature-explanations) contains the Y explanation for every module, captured from the current catalog.
+See the [complete illustrated installation](Installation.md) for the SD/eMMC path. The module list below explains each feature; press Y in the installer for its explanation.
 
 Setup warns when no emulator is selected or when the selected destination lacks a practical way to add games. An eMMC system with all transports disabled needs an installed external-card route, for example. Dependencies and missing access routes must be resolved or acknowledged as directed before confirmation.
 
@@ -44,7 +44,7 @@ Setup warns when no emulator is selected or when the selected destination lacks 
 | Rewind | Move backward through recent gameplay by holding L2. Uses extra memory and processing while recording. |
 | Run-Ahead | Reduce input delay in GBA games using mGBA. Uses more CPU and can reduce speed in demanding games. Unavailable with gpSP only. |
 | Automatic Network Time | Set the clock from the internet using Wi-Fi or Internet via USB. USB needs internet sharing on the computer. Manual clock setting stays available. |
-| OTA Updates | Add small signed Slot/core updates and OS patches, with ordered catch-up and continuation after restarts. Downloads need an internet connection. See [OTA updates](OTA-Updates.md). |
+| OTA Updates | Download small signed updates in order, continuing after restarts. Preserves installed features and a rollback version. Needs internet access. See [OTA updates](OTA-Updates.md). |
 | Diagnostics | View available RAM, temperature, storage, versions and service status. Readings refresh while Diagnostics is open. |
 | SD Storage Check / Repair | Manually check or repair SD games storage. Repair needs confirmation and changes filesystem metadata. Back up first. Internal eMMC and system partitions stay protected. |
 | Schedutil Governor | Add a System switch for an alternative CPU power policy. Initially Off: ondemand 20 ms stays the default. Battery savings vary by game. CPU speed limits stay unchanged. |

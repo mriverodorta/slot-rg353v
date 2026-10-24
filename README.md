@@ -6,7 +6,7 @@ Browse cartridges, play, suspend and resume. Choose optional features during ins
 
 ![Slot RG353V cartridge shelf](wiki/images/features/shelf.png)
 
-The [illustrated user guide](wiki/Home.md) covers every setup page, optional module, connection method and game control. Browse [all screens and videos](wiki/Screens-and-Media.md), including the native-resolution setup walkthrough and boot timing replay.
+The [illustrated user guide](wiki/Home.md) covers every setup page, optional module, connection method and game control. See the [setup walkthrough](wiki/Installation.md) and [boot timing replay](wiki/Boot-and-Recovery.md).
 
 ## Install
 
