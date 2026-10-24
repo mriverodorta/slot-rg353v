@@ -64,6 +64,14 @@ Selection uses the exact released Full image, all optional modules, the bound in
 
 Original package notices and Arm/Realtek/Rockchip binary-firmware terms remain available. Proprietary binary-only inputs retain exact upstream URL/hash bindings, rather than being described as open source. Repacking source downloads does not change any executable or the qualified flash-image checksum.
 
+## Reuse sources across releases
+
+Source downloads are versioned independently of installation images. A later image release should link to the existing immutable source asset URLs and SHA-256 values for every unchanged component. Do not upload another copy merely because the image release number changed.
+
+Publish new source archives only for changed components, plus a small per-release manifest mapping the image to its exact source inputs, configuration and repository tag. For example, a frontend-only update can reuse the existing Linux, U-Boot, GCC and unchanged dependency archives. Changed device-layer or build recipes belong in the new matching repository tag. This is the release packaging policy; creating the next release's mapping still requires review.
+
+Keep referenced source assets available alongside the releases that depend on them. Never overwrite an existing source asset with different contents.
+
 ## Locks, caching and reproducibility
 
 Normal builds do not use `--update`. A release tag and a development branch are different eligibility policies. ROCKNIX remains pinned to released `20261001`. The current mGBA pin is development-derived and device-tested; see Credits for precise provenance.

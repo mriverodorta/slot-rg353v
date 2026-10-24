@@ -14,6 +14,14 @@ Image creation does not publish anything. The earlier inherited RG SP/H700 autom
 8. Archive validation records with the exact image checksum. Retain the current public candidate plus three previous versions; do not overwrite paths while someone is flashing.
 9. Upload only the selected **public** `.img.gz`, checksum, notes and corresponding-source materials once the repository is ready. Publish the wiki from the reviewed version-controlled documentation.
 
+## Reuse sources across releases
+
+Source downloads are versioned independently of installation images. A later image release should link to the existing immutable source asset URLs and SHA-256 values for every unchanged component. Do not upload another copy merely because the image release number changed.
+
+Publish new source archives only for changed components, plus a small per-release manifest mapping the image to its exact source inputs, configuration and repository tag. For example, a frontend-only update can reuse the existing Linux, U-Boot, GCC and unchanged dependency archives. Changed device-layer or build recipes belong in the new matching repository tag. This is the release packaging policy; creating the next release's mapping still requires review.
+
+Keep referenced source assets available alongside the releases that depend on them. Never overwrite an existing source asset with different contents.
+
 ## Repeatable privacy inspection
 
 Run the read-only source audit against the exact source snapshot chosen for publication, keeping the report outside that tree:
