@@ -10,7 +10,7 @@ The [illustrated user guide](wiki/Home.md) covers every setup page, optional mod
 
 ## Install
 
-1. Download this project's compressed `.img.gz` from its GitHub Releases page when a release is published. Use the **public release**, not an image marked `PRIVATE`.
+1. Download this project's compressed `.img.gz` from [GitHub Releases](https://github.com/mriverodorta/slot-rg353v/releases). Use the **public release**, not an image marked `PRIVATE`.
 2. Flash it to a spare microSD with [balenaEtcher](https://etcher.balena.io/). Select the compressed image directly. Flashing erases the selected card.
 3. Insert the card in **TF1**. If our eMMC loader is already installed, hold **F** while powering on to boot TF1.
 4. Choose **Set up this SD card** or **Install to internal eMMC**, then choose Minimal, Recommended, Full or Custom. Full automatically includes every feature available in the image. Review the destination and features before confirming. Internal installation replaces the eMMC system, including Android.
@@ -69,4 +69,4 @@ Current startup is **about 4.2–4.3 seconds when the system boots from internal
 
 Perfect GB/DMG, GBC and GBA overlays and the DMG palette are the work of **[1playerinsertcoin](https://www.reddit.com/user/1playerinsertcoin/)**, with adaptations by **[mugwomp93](https://github.com/mugwomp93/muOS_Customization)**, collected in the **[Retro Game Corps Overlay Pack](https://github.com/retrogamecorps/RGC-Overlay-Pack)**. Copyright remains with their respective creators. **No explicit redistribution license was found for these files.** They are separately credited third-party artwork; this project's GPL license does not grant rights to that artwork. See [the exact provenance and file notices](licenses/perfect-overlays/PROVENANCE.md).
 
-Built on the work of the Slot, ROCKNIX, mGBA, gpSP, libretro, shader and overlay authors. Read [CREDITS.md](CREDITS.md) for individual links, adaptations and asset licensing, and [LICENSE](LICENSE) for Slot's GPL terms. Components keep their own licenses. **The public release process is still being qualified; no release has been uploaded by this reorganization.**
+Built on the work of the Slot, ROCKNIX, mGBA, gpSP, libretro, shader and overlay authors. Read [CREDITS.md](CREDITS.md) for individual links, adaptations and asset licensing, and [LICENSE](LICENSE) for Slot's GPL terms. Components keep their own licenses. The first public candidate passed clean Full SD installation, game/save/USB/sleep-wake checks and three retained cold starts. See [qualification details and tested host limits](wiki/Releasing.md).
