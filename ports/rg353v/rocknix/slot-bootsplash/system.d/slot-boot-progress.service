@@ -1,0 +1,18 @@
+[Unit]
+Description=Slot graphical boot progress
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=slot-rg353v.service
+Conflicts=shutdown.target
+Before=shutdown.target
+ConditionPathExists=/usr/bin/slot-splash
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/slot-boot-observer
+TimeoutStopSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=sysinit.target

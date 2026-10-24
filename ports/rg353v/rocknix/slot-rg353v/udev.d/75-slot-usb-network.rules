@@ -1,0 +1,2 @@
+# This private cable is configured by Slot, independently of Wi-Fi/NetworkManager.
+SUBSYSTEM=="net", KERNEL=="slotusb*", NAME:="slotusb0", ENV{NM_UNMANAGED}="1"

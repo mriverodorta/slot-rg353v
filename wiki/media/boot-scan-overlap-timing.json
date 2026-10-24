@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "clock": "Linux CLOCK_MONOTONIC: kernel entry to first scene swap",
+  "boot_type": "controlled software restarts, not physical button/rumble measurements",
+  "conditions": {
+    "system": "TF1 SD",
+    "library": "TF2, 81 games",
+    "save_location": "Game",
+    "developer_mode": "On",
+    "usb_networking": "Off",
+    "modules": 23,
+    "schedutil": "Off"
+  },
+  "before": {
+    "scene_s": 5.657039029333333,
+    "frontend_s": 1.3340397786666667,
+    "main_scan_s": 0.278687111,
+    "root_s": 0.13766968066666654,
+    "graphics_s": 0.43764894466666665,
+    "cart_faces_s": 0.32280052800000014
+  },
+  "after": {
+    "scene_s": 5.2915610153333335,
+    "frontend_s": 1.038314181333333,
+    "main_scan_s": 0.00039102799999983046,
+    "root_s": 0.0698341393333332,
+    "graphics_s": 0.47910381999999974,
+    "cart_faces_s": 0.3245618056666662
+  },
+  "runs": {
+    "before": [
+      {
+        "cycle": 1,
+        "scene_s": 5.990377543,
+        "frontend_s": 1.3440568759999998,
+        "main_scan_s": 0.27850987500000013,
+        "root_s": 0.13775650000000006,
+        "graphics_s": 0.4252844169999994,
+        "cart_faces_s": 0.3259585000000005
+      },
+      {
+        "cycle": 2,
+        "scene_s": 5.487450377,
+        "frontend_s": 1.3282508760000002,
+        "main_scan_s": 0.2786988749999999,
+        "root_s": 0.13692262499999952,
+        "graphics_s": 0.4451022920000005,
+        "cart_faces_s": 0.319811917
+      },
+      {
+        "cycle": 3,
+        "scene_s": 5.493289168,
+        "frontend_s": 1.3298115839999998,
+        "main_scan_s": 0.27885258299999993,
+        "root_s": 0.13832991700000008,
+        "graphics_s": 0.44256012499999997,
+        "cart_faces_s": 0.32263116699999994
+      }
+    ],
+    "after": [
+      {
+        "cycle": 1,
+        "scene_s": 5.216038501,
+        "frontend_s": 1.0658625839999996,
+        "main_scan_s": 0.0003800419999997473,
+        "root_s": 0.0696211249999994,
+        "graphics_s": 0.4917922919999995,
+        "cart_faces_s": 0.3320371249999994,
+        "primary_scan_s": 0.08170166699999992,
+        "primary_finished_before_root": true
+      },
+      {
+        "cycle": 2,
+        "scene_s": 5.234473293,
+        "frontend_s": 1.0309824589999996,
+        "main_scan_s": 0.0003890840000000395,
+        "root_s": 0.06976258400000024,
+        "graphics_s": 0.46557729199999986,
+        "cart_faces_s": 0.31970458300000004,
+        "primary_scan_s": 0.07982333300000022,
+        "primary_finished_before_root": true
+      },
+      {
+        "cycle": 3,
+        "scene_s": 5.424171252,
+        "frontend_s": 1.0180975009999997,
+        "main_scan_s": 0.0004039579999997045,
+        "root_s": 0.07011870899999995,
+        "graphics_s": 0.4799418759999998,
+        "cart_faces_s": 0.32194370899999925,
+        "primary_scan_s": 0.16517520799999996,
+        "primary_finished_before_root": true
+      }
+    ]
+  },
+  "observed_saving_ms": 365.4780139999998,
+  "frontend_saving_ms": 295.7255973333337,
+  "limitations": [
+    "Three runs per version, sequential before/after sets.",
+    "Pre-frontend I/O variation contributes to the total difference.",
+    "Heavy capture ran after first scene; no physical panel latency measurement.",
+    "Fresh-image and physical cold-start qualification remain separate."
+  ]
+}

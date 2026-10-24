@@ -1,0 +1,17 @@
+[Unit]
+Description=RG353V failed Wi-Fi probe recovery
+After=rocknix-autostart.service NetworkManager.service
+ConditionPathExists=/sys/bus/platform/devices/fe000000.mmc
+
+[Service]
+Type=oneshot
+# Manual Wi-Fi off can cancel the bounded initial probe delay.
+SuccessExitStatus=SIGTERM
+ExecStart=/usr/bin/slot-wifi-probe-recovery
+ExecStopPost=/usr/bin/slot-wifi-probe-recovery --restore
+TimeoutStartSec=75
+TimeoutStopSec=15
+RemainAfterExit=yes
+
+[Install]
+WantedBy=rocknix.target

@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""Prepare the single Slot SMB share; never start networking or alter content."""
+import argparse
+import configparser
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+
+def prepare(storage=Path('/storage'), runtime=Path('/run'), template=Path('/usr/share/slot/ksmbd.conf')):
+    storage, runtime = Path(storage), Path(runtime)
+    content = storage / 'slotcontent'
+    if content.is_symlink() or not content.is_dir():
+        raise ValueError('Slot content is unavailable')
+    if storage == Path('/storage') and not os.path.ismount(content):
+        raise ValueError('Slot content partition is not mounted')
+    if (runtime / 'slot-usb/active').exists():
+        raise ValueError('USB storage owns the content partition')
+    text = template.read_text()
+    conf = configparser.ConfigParser(interpolation=None)
+    conf.read_string(text)
+    if conf.sections() != ['global', 'Slot'] or conf['Slot'].get('path') != '/storage/slotcontent':
+        raise ValueError('Unexpected file sharing template')
+    directory = runtime / 'ksmbd'
+    if directory.is_symlink():
+        raise ValueError('Unsafe runtime directory')
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(directory, 0o700)
+    path = directory / 'ksmbd.conf'
+    with tempfile.NamedTemporaryFile(mode='w', dir=directory, delete=False) as f:
+        temp = Path(f.name)
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    try:
+        temp.chmod(0o600)
+        temp.replace(path)
+    finally:
+        temp.unlink(missing_ok=True)
+    # Guest access needs no passwords. Never import a Samba password database.
+    database = directory / 'ksmbdpwd.db'
+    fd = os.open(database, os.O_CREAT | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+    os.close(fd)
+    return path
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('command', choices=['prepare', 'load', 'unload'])
+    args = parser.parse_args()
+    if args.command in ('prepare', 'load'):
+        prepare()
+        if args.command == 'load':
+            subprocess.run(['modprobe', 'ksmbd'], check=True)
+    else:
+        # Never force removal; another module consumer may still be active.
+        subprocess.run(['modprobe', '-r', 'ksmbd'], capture_output=True)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        raise SystemExit('File sharing could not prepare its content partition')

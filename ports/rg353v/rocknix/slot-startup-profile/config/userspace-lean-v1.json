@@ -1,0 +1,119 @@
+{
+  "schema": 1,
+  "id": "rg353v-lean-v1",
+  "source_sha256": {
+    "SDL2": "30903b5957624fd07fdd0672350b277e62da20d4106bebbf79f4e40cf0aaf4c4",
+    "SDL2_glesonly": "10adcf710c7be732304ad44cc12ed2d7d288063fce86aed41421fe14b7cf4563",
+    "squashfs-tools": "6bb77fb6c201fd7576b4c3a8dd0d3a597b8a8c8d9a88605a15e3c39a5e4e49ea",
+    "libmali": "eb06a98b192a2150a80dcc6da068c8602c36cbdc5b23ffbd749ab9dc33637f74"
+  },
+  "image_remove": [
+    "mako-osd"
+  ],
+  "network_remove": [
+    "bluez",
+    "dbussy",
+    "samba",
+    "wsdd2"
+  ],
+  "slot_remove": [
+    "pipewire",
+    "wireplumber"
+  ],
+  "sdl_remove": [
+    "pulseaudio",
+    "pipewire",
+    "wayland",
+    "sway",
+    "swaywm-env",
+    "librga",
+    "vulkan-loader"
+  ],
+  "sdl_required": {
+    "SDL_ALSA": "ON",
+    "SDL_ALSA_SHARED": "ON",
+    "SDL_KMSDRM": "ON",
+    "SDL_OPENGLES": "ON",
+    "SDL_JOYSTICK": "ON",
+    "SDL_LIBUDEV": "OFF",
+    "SDL_HIDAPI_JOYSTICK": "ON",
+    "SDL_WAYLAND": "OFF",
+    "SDL_WAYLAND_SHARED": "OFF",
+    "SDL_WAYLAND_LIBDECOR": "OFF",
+    "SDL_X11": "OFF",
+    "SDL_VULKAN": "OFF",
+    "SDL_PIPEWIRE": "OFF",
+    "SDL_PIPEWIRE_SHARED": "OFF",
+    "SDL_PULSEAUDIO": "OFF",
+    "SDL_PULSEAUDIO_SHARED": "OFF",
+    "SDL_OSS": "OFF",
+    "SDL_DISKAUDIO": "OFF",
+    "SDL_DUMMYAUDIO": "OFF",
+    "SDL_DUMMYVIDEO": "OFF",
+    "SDL_OFFSCREEN": "OFF"
+  },
+  "packages_absent": [
+    "pipewire",
+    "wireplumber",
+    "bluez",
+    "dbussy",
+    "ldacBT",
+    "libfreeaptx",
+    "fdk-aac",
+    "sbc",
+    "sway",
+    "swaybg",
+    "xwayland",
+    "wlroots",
+    "mako-osd",
+    "mako-notify",
+    "foot",
+    "bemenu"
+  ],
+  "retain": [
+    "slot-rg353v",
+    "slot-bootsplash",
+    "slot-startup-profile",
+    "SDL2",
+    "SDL2_glesonly",
+    "alsa",
+    "alsa-lib",
+    "libmali",
+    "mali-bifrost",
+    "rocknix-joypad",
+    "networkmanager",
+    "slot-wpa-supplicant",
+    "iwd",
+    "openssh",
+    "ksmbd-tools",
+    "avahi",
+    "Python3",
+    "openssl",
+    "exfatprogs",
+    "system-utils",
+    "powerstate",
+    "seatd"
+  ],
+  "image_remove_files": [
+    "usr/lib/libvulkan_panfrost.so",
+    "usr/share/vulkan/registry/vk.xml",
+    "usr/share/vulkan/registry/validusage.json",
+    "usr/sbin/nmbd",
+    "usr/sbin/avahi-daemon",
+    "usr/bin/avahi-browse",
+    "usr/bin/avahi-set-host-name",
+    "usr/bin/seatd",
+    "usr/bin/seatd-launch",
+    "etc/avahi/avahi-daemon.conf",
+    "etc/avahi/hosts",
+    "etc/avahi/services/ssh.service",
+    "etc/avahi/services/sftp-ssh.service",
+    "etc/dbus-1/system.d/avahi-dbus.conf"
+  ],
+  "squashfs": {
+    "compression": "lz4",
+    "high_compression": true,
+    "block_bytes": 65536
+  },
+  "mali_variant": "bifrost-g52-g29p1-gles"
+}

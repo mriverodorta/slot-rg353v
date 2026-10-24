@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""Session-only RG353V networking, with an explicit persistent developer policy."""
+import argparse
+import contextlib
+import fcntl
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+FEATURES = ('wifi', 'sharing', 'ssh', 'time')
+STOP = ('slot-wifi-probe-recovery.service', 'systemd-timesyncd.service',
+        'slot-sharing.service', 'sshd.service', 'NetworkManager.service',
+        'slot-wpa-supplicant.service', 'systemd-resolved.service')
+
+class ServiceError(Exception):
+    pass
+
+def execute(args):
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=40)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise ServiceError('Service request timed out; retry') from e
+
+class Controller:
+    def __init__(self, storage=Path('/storage'), runtime=Path('/run'), run=execute, sysroot=Path('/sys')):
+        self.sysroot = Path(sysroot)
+        self.storage = Path(storage)
+        self.runtime = Path(runtime)
+        self.flags = self.runtime / 'slot-services'
+        self.policy = self.storage / '.config/slot/developer-mode'
+        self.run = run
+
+    def call(self, *args, required=True):
+        p = self.run(list(args))
+        if required and p.returncode:
+            raise ServiceError('Could not complete service change; retry')
+        return p
+
+    @contextlib.contextmanager
+    def locked(self):
+        self.flags.mkdir(parents=True, exist_ok=True)
+        with (self.flags / 'control.lock').open('a') as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            yield
+
+    @staticmethod
+    def atomic(path, value):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, name = tempfile.mkstemp(prefix='.' + path.name, dir=path.parent)
+        try:
+            with os.fdopen(fd, 'w') as f:
+                os.fchmod(f.fileno(), 0o600)
+                f.write(value);f.flush();os.fsync(f.fileno())
+            os.replace(name, path)
+            fd = os.open(path.parent, os.O_RDONLY)
+            try:os.fsync(fd)
+            finally:os.close(fd)
+        finally:
+            if os.path.exists(name):os.unlink(name)
+
+    def installed(self, feature):
+        name={'time':'network-time','usb':'usb-network'}.get(feature,feature)
+        def read(path):
+            try:
+                lines=[s.strip() for s in path.read_text().splitlines() if s.strip() and not s.lstrip().startswith('#')]
+            except FileNotFoundError:return None
+            except OSError:return set()
+            return set(lines[1:]) if lines and lines[0]=='slot-features-v1' else set()
+        for path in (Path('/usr/share/slot/features-v1'),self.storage/'.config/slot/features-v1'):
+            names=read(path)
+            if names is not None and name not in names:return False
+        return True
+
+    def developer_selected(self, feature):
+        path=self.storage/'.config/slot/setup-developer-features-v1'
+        try:lines=path.read_text().splitlines()
+        except FileNotFoundError:return True
+        name={'time':'network-time','usb':'usb-network'}.get(feature,feature)
+        return bool(lines and lines[0]=='slot-features-v1' and name in lines[1:])
+
+    def require(self, feature):
+        if not self.installed(feature):raise ServiceError('Feature is not installed')
+
+    def allowed(self, feature):
+        return (self.flags / (feature + '.on')).is_file()
+
+    def flag(self, feature, on):
+        p = self.flags / (feature + '.on')
+        if on:
+            self.flags.mkdir(parents=True, exist_ok=True)
+            p.touch(mode=0o600)
+        else:p.unlink(missing_ok=True)
+
+    def active(self, name):
+        return self.call('systemctl', 'is-active', name, required=False).returncode == 0
+
+    def developer(self):
+        try:return self.policy.read_text().strip() == '1'
+        except FileNotFoundError:return False
+
+    def base(self):
+        self.flag('network', True)
+        self.call('systemctl', 'start', 'network-base.service', 'openssl-config.service')
+
+    def prepare(self, feature):
+        self.require(feature)
+        if feature not in ('ssh', 'sharing') or not (self.allowed('wifi') or self.allowed('usb')):
+            raise ServiceError('Turn Wi-Fi or USB networking on first')
+        if self.allowed('wifi'):
+            self.base()
+        if feature == 'sharing':
+            self.call('/usr/bin/slot-ksmbd', 'prepare')
+            return  # The guest share has no account/password setup.
+        if not (self.flags / 'auth.ready').exists():
+            self.call('/usr/lib/autostart/common/007-rootpw')
+            (self.flags / 'auth.ready').touch(mode=0o600)
+
+    def resume_ssh(self):
+        # ssh.on is the owner's choice for this boot, not proof of an active
+        # transport. Listen again when an explicitly enabled transport returns;
+        # the socket becomes reachable as soon as that transport has an address.
+        if self.allowed('ssh') and self.installed('ssh'):
+            self.prepare('ssh')
+            self.call('systemctl', 'start', 'sshd.service')
+
+    def wifi(self, on):
+        if not on:
+            # Stop recovery before disabling its radio/backend. Never unload the
+            # SDIO controller or erase profiles, credentials, or firmware.
+            keep_usb = self.allowed('usb')
+            keep_time = keep_usb and self.usb_internet() and self.allowed('time')
+            for n in (('wifi',) if keep_time else ('wifi', 'time') if keep_usb else (*FEATURES, 'network')):
+                if n != 'ssh':self.flag(n, False)
+            if self.installed('wifi'):self.call('systemctl', 'stop', STOP[0], required=True)
+            keep = {unit for feature, unit in [('ssh', 'sshd.service'), ('sharing', 'slot-sharing.service')]
+                    if keep_usb and self.allowed(feature)}
+            if keep_time:keep.add('systemd-timesyncd.service')
+            owners={'systemd-timesyncd.service':'time','slot-sharing.service':'sharing','sshd.service':'ssh'}
+            units=[unit for unit in STOP[1:] if unit not in keep and self.installed(owners.get(unit,'wifi'))]
+            if units:self.call('systemctl', 'stop', *units, required=True)
+            if not self.installed('wifi'):return
+            # A loaded radio must be blocked even with NetworkManager stopped.
+            rfkill = self.runtime / 'slot-services/radio-blocked'
+            self.call('rfkill', 'block', 'wlan')
+            rfkill.parent.mkdir(parents=True,exist_ok=True)
+            rfkill.touch(mode=0o600)
+            return
+        self.require('wifi')
+        self.flag('wifi', True)
+        try:
+            self.base()
+            self.call('rfkill', 'unblock', 'wlan')
+            (self.flags / 'radio-blocked').unlink(missing_ok=True)
+            self.call('modprobe', 'rtw88_8821cs')
+            self.call('systemctl', 'start', 'systemd-resolved.service',
+                      'slot-wpa-supplicant.service', 'NetworkManager.service')
+            self.call('nmcli', '--wait', '10', 'radio', 'wifi', 'on')
+            self.call('systemctl', 'start', '--no-block', 'slot-wifi-probe-recovery.service')
+        except BaseException:
+            self.wifi(False)
+            raise
+        # A failed SSH restart must not tear down a working Wi-Fi connection.
+        self.resume_ssh()
+
+    def usb(self, on):
+        if on:
+            self.require('usb')
+            gadget = self.sysroot / 'kernel/config/usb_gadget/slot-network'
+            try:
+                valid = ((gadget / 'UDC').read_text().strip() == 'fcc00000.usb'
+                         and any((self.sysroot / 'class/net').glob('slotusb[0-9]*')))
+            except OSError:
+                valid = False
+            if not valid:raise ServiceError('USB networking is not ready')
+            self.flag('usb', True)
+            self.flag('network', True)
+            self.resume_ssh()
+        else:
+            self.flag('usb', False)
+            if not self.allowed('wifi'):self.wifi(False)
+
+    def usb_internet(self):
+        if not self.allowed('usb'):return False
+        try:
+            state=json.loads((self.runtime/'slot-usb-network/state.json').read_text())
+            return state.get('internet') is True and bool(state.get('lease'))
+        except (OSError,ValueError):return False
+
+    def time(self, on):
+        if on:self.require('time')
+        if on and not (self.allowed('wifi') or self.usb_internet()):raise ServiceError('Enable an Internet connection first')
+        self.flag('time', on)
+        if on:
+            try:
+                self.call('systemctl', 'start', 'systemd-timesyncd-setup.service', 'tz-data.service')
+                self.call('systemctl', 'start', 'systemd-timesyncd.service')
+            except BaseException:
+                self.flag('time', False)
+                self.call('systemctl', 'stop', 'systemd-timesyncd.service', required=False)
+                raise
+        elif self.installed('time'):self.call('systemctl', 'stop', 'systemd-timesyncd.service')
+
+    def set_developer(self, on):
+        if on:self.require('developer')
+        old = self.developer()
+        if old != on or not self.policy.exists():
+            self.atomic(self.policy, '1\n' if on else '0\n')
+        if not on:
+            self.flag('ssh', False)
+            self.wifi(False)
+            return
+        try:
+            self.require('developer')
+            expected=[]
+            # Private installer profiles can request persistent USB debugging.
+            # Ordinary developer mode retains its existing Wi-Fi behavior.
+            if self.installed('wifi') and self.developer_selected('wifi'):
+                self.wifi(True)
+                expected.extend(['NetworkManager.service','slot-wpa-supplicant.service'])
+            for feature,unit in [('ssh','sshd.service'),('sharing','slot-sharing.service')]:
+                if not self.installed(feature) or not self.developer_selected(feature):continue
+                self.prepare(feature)
+                if feature=='ssh':
+                    marker=self.storage/'.cache/services/sshd.conf'
+                    if not marker.exists():
+                        saved=self.storage/'.cache/slot-ssh/sshd.env'
+                        self.atomic(marker,saved.read_text() if saved.exists() else '')
+                else:(self.storage/'.cache/services/samba.disabled').unlink(missing_ok=True)
+                self.flag(feature,True);self.call('systemctl','start',unit);expected.append(unit)
+            if self.installed('time') and self.developer_selected('time') and (self.allowed('wifi') or self.usb_internet()):
+                self.time(True);expected.append('systemd-timesyncd.service')
+            if not all(self.active(n) for n in expected):
+                raise ServiceError('A requested service did not start; retry')
+        except BaseException:
+            self.atomic(self.policy, '1\n' if old else '0\n')
+            # A developer boot must keep working SSH/Wi-Fi available for repair
+            # if an optional service fails. A new opt-in rolls back to offline.
+            if not old:
+                self.flag('ssh', False)
+                self.wifi(False)
+            raise
+
+    def status(self):
+        enabled = self.allowed('wifi')
+        return {'protocol':'1', 'wifi':str(int(enabled)),
+                'developer':str(int(self.developer())),
+                'time':str(int(self.allowed('time')))}
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('command', choices=['status', 'wifi', 'time', 'developer', 'prepare', 'usb'])
+    p.add_argument('value', nargs='?', choices=['on', 'off', 'ssh', 'sharing'])
+    a = p.parse_args();c = Controller()
+    try:
+        # Starting USB invokes this helper to grant its session flag. Do it
+        # before holding control.lock, otherwise the nested request deadlocks.
+        usb_policy=c.storage/'.config/slot/developer-usb'
+        if (a.command=='developer' and a.value=='on' and c.installed('developer')
+                and c.installed('usb') and usb_policy.is_file()
+                and usb_policy.read_text().strip()=='1'):
+            c.call('systemctl','start','slot-usb-network.service')
+        with c.locked():
+            if a.command == 'status':pass
+            elif a.command == 'prepare' and a.value in ('ssh','sharing'):c.prepare(a.value)
+            elif a.command in ('wifi','time','developer','usb') and a.value in ('on','off'):
+                method = c.set_developer if a.command == 'developer' else getattr(c, a.command)
+                method(a.value == 'on')
+            else:p.error('Invalid service request')
+            result = c.status()
+        for k,v in result.items():print(k+'\t'+v)
+    except (ServiceError,OSError) as e:
+        print(str(e), file=sys.stderr);raise SystemExit(1)
+
+if __name__ == '__main__':main()

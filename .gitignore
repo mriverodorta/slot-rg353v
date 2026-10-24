@@ -1,0 +1,46 @@
+/target
+**/*.rs.bk
+*.pdb
+
+/CLAUDE.md
+/.ralph
+/.superpowers
+
+/vendor
+/sdcard
+/dist
+*.dylib
+*.so
+
+.DS_Store
+/.idea
+/target-device
+/target-rg353v
+/dist-rg353v
+/.upstream
+/local-logs
+/prep
+/.build-rg353v
+/.private-rg353v
+/target-verify
+/dist-device
+
+# Parallel implementation worktrees, never content.
+/.worktrees
+.superpowers/
+
+__pycache__/
+
+# Private development images contain local connection provisioning.
+/output/rg353v-private-*
+
+# Private user save archive.
+/retroarch.zip
+
+# Host-only build resources, private development images and public release artifacts.
+/resources
+/localdev
+/release
+/output
+/log
+/roadmap.md

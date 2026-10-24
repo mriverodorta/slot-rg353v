@@ -1,0 +1,859 @@
+#!/usr/bin/env python3
+"""Versioned RG353V OS installation; never repartition or overwrite content."""
+import argparse
+import contextlib
+import copy
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+from pathlib import Path
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import uuid
+
+sys.dont_write_bytecode = True
+
+common = Path(__file__).with_name('slot-update')
+if not common.exists():
+    common = Path(__file__).with_name('slot-update.py')
+loader = importlib.machinery.SourceFileLoader('slot_update_common', str(common))
+spec = importlib.util.spec_from_loader(loader.name, loader)
+if loader.name in sys.modules:
+    u = sys.modules[loader.name]
+else:
+    u = importlib.util.module_from_spec(spec)
+    sys.modules[loader.name] = u
+    loader.exec_module(u)
+
+MAX_OS_BYTES = 2 * 1024**3
+BOOT_RESERVE = 64 * 1024**2
+HEALTH_TIMEOUT = 90
+
+
+def boot_entries(text):
+    entries, current, default = {}, None, None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        parts = line.split(None, 1)
+        u.require(len(parts) == 2, 'Malformed extlinux configuration')
+        key, value = parts[0].upper(), parts[1]
+        if key == 'LABEL':
+            u.require(u.SAFE_ID.fullmatch(value) and value not in entries, 'Invalid/duplicate boot label')
+            current = {}
+            entries[value] = current
+        elif key == 'DEFAULT':
+            default = value
+        elif key in ('TIMEOUT', 'MENU') and current is None:
+            continue
+        else:
+            u.require(current is not None and key in ('LINUX', 'FDTDIR', 'FDT', 'APPEND'),
+                      'Unsupported boot directive: ' + key)
+            u.require(key not in current, 'Duplicate boot directive')
+            current[key] = value
+    u.require(bool(entries) and (default is None or default in entries), 'Missing default boot entry')
+    selected = entries[default or next(iter(entries))]
+    u.require('LINUX' in selected and 'APPEND' in selected, 'Incomplete boot entry')
+    u.require(('FDT' in selected) != ('FDTDIR' in selected), 'Expected one device-tree directive')
+    for key in ('LINUX', 'FDT', 'FDTDIR'):
+        if key in selected:
+            u.require(selected[key].startswith('/'), 'Boot paths must be absolute')
+            u.safe_path(selected[key].lstrip('/'))
+    return selected
+
+
+def arguments(entry):
+    return dict(part.split('=', 1) for part in shlex.split(entry['APPEND']) if '=' in part)
+
+
+def validate_storage_arguments(args, layout):
+    for key, mount, label in [('boot', '/flash', 'ROCKNIX'), ('disk', '/storage', 'STORAGE')]:
+        value = args.get(key, '')
+        identity = layout.get(mount, {}).get('UUID')
+        u.require(value == 'LABEL=' + label or
+                  (identity and value.lower() == ('UUID=' + identity).lower()),
+                  'Unsupported boot/storage arguments')
+
+
+def new_boot_config(text, version):
+    u.require(bool(u.SAFE_ID.fullmatch(version)), 'Invalid OS version')
+    previous = boot_entries(text)
+    prefix = '/slot-os/' + version
+    candidate = dict(previous, LINUX=prefix + '/KERNEL')
+    if 'FDTDIR' in candidate:
+        candidate['FDTDIR'] = prefix + '/device_trees'
+    else:
+        candidate['FDT'] = prefix + '/device_trees/' + Path(candidate['FDT']).name
+    args = [part for part in shlex.split(previous['APPEND'])
+            if not part.startswith(('BOOT_IMAGE=', 'SYSTEM_IMAGE=', 'SLOT_OS_ID=', 'SLOT_BOOT_ASSETS='))]
+    args += ['BOOT_IMAGE=' + prefix + '/KERNEL', 'SYSTEM_IMAGE=' + prefix + '/SYSTEM', 'SLOT_OS_ID=' + version,
+             'SLOT_BOOT_ASSETS=' + prefix + '/boot-assets']
+    candidate['APPEND'] = ' '.join(args)
+    def stanza(label, entry):
+        return 'LABEL ' + label + '\n' + ''.join('  ' + key + ' ' + value + '\n' for key, value in entry.items())
+    return 'DEFAULT slot-' + version + '\nTIMEOUT 10\n' + stanza('slot-' + version, candidate) + stanza('slot-previous', previous)
+
+
+def single_boot_config(text):
+    entry = boot_entries(text)
+    if len(re.findall(r'^\s*LABEL\s+', text, re.M | re.I)) == 1:
+        return text
+    return 'DEFAULT slot-retained\nTIMEOUT 10\nLABEL slot-retained\n' + ''.join(
+        '  ' + key + ' ' + value + '\n' for key, value in entry.items())
+
+
+def boot_payload_refs(text):
+    """Include every boot-menu entry, not just the default selection."""
+    boot_entries(text)  # Validate the supported boot grammar first.
+    versions, factory = set(), False
+    for line in text.splitlines():
+        fields = line.strip().split(None, 1)
+        if len(fields) != 2 or fields[0].startswith('#'):
+            continue
+        key, value = fields[0].upper(), fields[1]
+        paths = [value] if key in ('LINUX', 'FDT', 'FDTDIR') else []
+        if key == 'APPEND':
+            args = arguments({'APPEND': value})
+            paths += [args[k] for k in ('BOOT_IMAGE', 'SYSTEM_IMAGE', 'SLOT_BOOT_ASSETS') if k in args]
+        for path in paths:
+            u.require(path.startswith('/'), 'Retention needs absolute boot paths')
+            u.safe_path(path[1:])
+            parts = Path(path).parts
+            if len(parts) >= 4 and parts[1] == 'slot-os':
+                u.require(bool(u.SAFE_ID.fullmatch(parts[2])), 'Invalid retained OS id')
+                versions.add(parts[2])
+            else:
+                u.require(parts[1] in ('KERNEL', 'SYSTEM', 'device_trees', 'overlays', 'boot-assets'),
+                          'Unknown boot payload; refusing cleanup')
+                factory = True
+    return versions, factory
+
+
+def atomic_text(path, text):
+    path = Path(path)
+    tmp = path.with_name(path.name + '.slot-' + uuid.uuid4().hex)
+    try:
+        with tmp.open('x') as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        tmp.replace(path)
+        u.syncdir(path.parent)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def payload_name(name):
+    u.safe_path(name)
+    return name in ('KERNEL', 'SYSTEM') or any(name.startswith(p) for p in ('device_trees/', 'overlays/', 'boot-assets/'))
+
+
+def inspect_system(root, kernel):
+    root = Path(root)
+    profile = u.load(root / 'usr/share/slot/os-profile.json')
+    u.require(profile.get('schema') == 1 and profile.get('device') == 'rg353v'
+              and profile.get('arch') == 'aarch64' and profile.get('slot_update_api') == u.API,
+              'Unsupported OS device/profile/API')
+    u.require(profile.get('settings_contract') == 1 and profile.get('sram_contract') == 1,
+              'OS requires an unsupported settings/save migration')
+    expected = {'boot_label': 'ROCKNIX', 'system_label': 'STORAGE', 'content_label': 'SLOT',
+                'content_filesystem': 'exfat', 'content_mount': '/storage/slotcontent'}
+    u.require(profile.get('storage') == expected, 'OS changes the content storage contract')
+    os_release = {}
+    for line in (root / 'etc/os-release').read_text().splitlines():
+        if '=' in line:
+            k, v = line.split('=', 1)
+            os_release[k] = v.strip('"')
+    u.require(os_release.get('OS_NAME') == 'ROCKNIX' and os_release.get('HW_DEVICE') == 'RK3566'
+              and os_release.get('HW_ARCH') == 'aarch64', 'Wrong OS/SoC/architecture')
+    build = u.load(root / 'usr/share/slot/System/build-manifest.json')
+    u.require(build['sources'] == profile['sources'] and build['layer_sha256'] == profile['layer_sha256']
+              and os_release.get('BUILD_ID') == profile['sources']['rocknix']['commit'],
+              'OS build provenance does not match its profile')
+    modules = root / 'usr/lib/kernel-overlays/base/lib/modules'
+    versions = [p.name for p in modules.iterdir() if p.is_dir()]
+    match = re.search(rb'Linux version ([0-9][^\s\x00]+)', Path(kernel).read_bytes())
+    u.require(len(versions) == 1 and match and match[1].decode() == versions[0], 'Kernel/module version mismatch')
+    policy = u.os_module_policy(root)
+    for path in ('usr/bin/slot-update', 'usr/bin/slot-os-update', 'usr/bin/slot-start',
+                 'usr/bin/slot-mount-content', 'usr/bin/slot-network-state',
+                 'usr/lib/systemd/system/slot-os-guard.service', 'usr/lib/systemd/system/slot-os-health.service',
+                 'usr/lib/systemd/system/slot-rg353v.service', 'usr/lib/systemd/system/storage-slotcontent.service'):
+        if path == 'usr/bin/slot-network-state' and policy is not None and 'wifi' not in policy['selected']:
+            continue
+        u.require((root / path).is_file(), 'OS is missing required profile file: ' + path)
+    system = root / 'usr/share/slot/System'
+    cores = u.installed_cores(system)
+    u.require({name for name in u.CORES if (system/name).exists() or (system/name).is_symlink()} == cores,
+              'Factory contains an unselected emulator')
+    u.require(profile.get('factory_binaries') == {name: u.sha(system / name) for name in ('slot', *cores)},
+              'Factory binaries changed after the tested bundle was staged')
+    for name in ('slot', *cores):
+        u.elf(system / name)
+    return {'runtime': {'api': u.API, 'os_build': os_release['BUILD_ID'], 'kernel': versions[0]},
+            'profile': profile, 'compat': u.contract(system)}
+
+
+def preserved_contract(declared, current, inventory):
+    previous = current['compat']
+    u.require(declared.get('config') == previous.get('config')
+              and declared.get('sram') == previous.get('sram')
+              and bool(declared.get('states')) and set(declared.get('states', {})) == set(previous.get('states', {}))
+              and set(declared['states']) <= u.CORES,
+              'OS requires a settings/save/state migration')
+    result = copy.deepcopy(declared)
+    for core in declared['states']:
+        if declared['states'][core] != previous['states'][core]:
+            # Component core updates may retain an older, tested state ABI ID.
+            # An OS containing the exact same core must retain that association.
+            u.require(inventory[core]['sha256'] == current['files'][core]['sha256'],
+                      'OS requires a settings/save/state migration: changed core ' + core)
+            result['states'][core] = previous['states'][core]
+    return result
+
+
+class OSManager:
+    def __init__(self, root='/storage/slot-os-updates', flash='/flash', manager='/storage/slot-manager',
+                 system_root='/', environment=None, inspector=None, layout_probe=None):
+        self.root, self.flash, self.manager_root = Path(root), Path(flash), Path(manager)
+        self.system_root, self.environment = Path(system_root), environment
+        self.inspector, self.layout_probe = inspector, layout_probe
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.pointer = self.root / 'state.json'
+        self.boot_config = self.flash / 'extlinux/extlinux.conf'
+
+    def manager(self):
+        return u.Manager(self.manager_root, self.environment)
+
+    def event(self, name, **details):
+        print(json.dumps({'event': name, **details}), flush=True)
+        history = self.root / 'history.json'
+        rows = u.load(history) if history.exists() else []
+        u.atomic_json(history, (rows + [{'time': time.time(), 'event': name, **details}])[-100:])
+
+    def active(self):
+        if not self.pointer.exists():
+            return None
+        version = u.load(self.pointer).get('transaction')
+        if version is None:
+            return None
+        u.require(isinstance(version, str) and bool(u.SAFE_ID.fullmatch(version)), 'Invalid OS transaction pointer')
+        return u.load(self.root / 'transactions' / version / 'transaction.json')
+
+    def save(self, record):
+        u.atomic_json(self.root / 'transactions' / record['id'] / 'transaction.json', record)
+
+    def prune(self, check_only=False):
+        with self.locked(), self.manager().locked():
+            return self.prune_locked(check_only)
+
+    def prune_locked(self, check_only=False):
+        """Keep current + previous + one trial; run only during update work.
+
+        Publish bounded rollback snapshots before deleting expired payloads.
+        Never prune a running rejected OS until the retained OS has booted.
+        """
+        record = self.active()
+        u.require(record is not None, 'No managed OS selected; refusing cleanup')
+        u.require(record['phase'] in ('confirmed', 'prepared', 'staged', 'booting'),
+                  'Recover the interrupted OS transaction before cleanup')
+        u.require(self.layout() == record['layout'], 'Partition identity changed; refusing cleanup')
+        config = self.boot_config.read_text()
+        u.require(config in (record['old_config'], record['new_config']),
+                  'Boot configuration changed outside the updater')
+        keep, factory = boot_payload_refs(config)
+        confirmed = record['phase'] == 'confirmed'
+        if confirmed:
+            u.require(self.boot_id() == record['id'] and record['id'] in keep,
+                      'Boot the confirmed OS before cleanup')
+        else:
+            old, old_factory = boot_payload_refs(record['old_config'])
+            keep |= old | {record['id']}
+            factory |= old_factory
+        running = self.boot_id()
+        if running:
+            u.require(bool(u.SAFE_ID.fullmatch(running)), 'Invalid running OS id')
+            keep.add(running)
+        u.require(len(keep) + int(factory) <= 3, 'Boot references exceed three versions; inspect before cleanup')
+        manager = self.manager()
+        state = manager.state()
+        revisions = {v for v in (state['current'], state['previous'],
+                     state['pending']['id'] if state['pending'] else None,
+                     record['manager_before']['current']) if v}
+        if not confirmed and record['manager_before']['previous']:
+            revisions.add(record['manager_before']['previous'])
+        if not confirmed:
+            revisions.add(record['candidate'])
+        # Preflight all kept copies and all removal paths before any mutation.
+        for name in revisions:
+            rev = manager.revision(name)
+            u.require(u.files(rev / 'System') == u.load(rev / 'revision.json')['files'],
+                      'Retained frontend is damaged: ' + name)
+        slots = self.flash / 'slot-os'
+        u.require(slots.is_dir() and not slots.is_symlink(), 'Invalid OS slot directory')
+        for name in keep:
+            slot = slots / name
+            u.require(slot.is_dir() and not slot.is_symlink(), 'Missing retained OS: ' + name)
+            u.require(not any(p.is_symlink() for p in slot.rglob('*')), 'Retained OS contains a symlink')
+            meta = u.load(self.root / 'transactions' / name / 'transaction.json')
+            u.require(meta['id'] == name, 'Retained transaction identity mismatch')
+            for file, info in meta['files'].items():
+                u.require(payload_name(file), 'Invalid retained payload path')
+                target = slot / file
+                u.require(target.is_file() and not target.is_symlink() and u.sha(target) == info['sha256'],
+                          'Retained OS is damaged: ' + name + '/' + file)
+        removals = []
+        for parent, retained in ((slots, keep), (manager.revisions, revisions),
+                                 (self.root / 'transactions', keep)):
+            u.require(not parent.is_symlink(), 'Cleanup parent is a symlink')
+            for path in parent.iterdir():
+                u.require(not path.is_symlink() and path.is_dir() and bool(u.SAFE_ID.fullmatch(path.name)),
+                          'Unexpected updater entry; inspect before cleanup: ' + str(path))
+                if path.name not in retained:
+                    removals.append(path)
+        archive = self.root.parent / '.cache/slot-boot-archive'
+        if archive.exists():
+            u.require(archive.is_dir() and not archive.is_symlink(), 'Invalid OS archive directory')
+            for path in archive.iterdir():
+                u.require(path.is_dir() and not path.is_symlink() and bool(u.SAFE_ID.fullmatch(path.name)),
+                          'Unexpected OS archive entry')
+                removals.append(path)
+        if not factory:
+            for name in ('KERNEL', 'SYSTEM', 'device_trees', 'overlays', 'boot-assets'):
+                path = self.flash / name
+                u.require(not path.is_symlink(), 'Legacy boot payload is a symlink')
+                if path.exists():
+                    removals.append(path)
+        for path in removals:
+            if path.is_dir():
+                u.require(not any(p.is_symlink() for p in path.rglob('*')), 'Cleanup tree contains a symlink')
+        if check_only:
+            return {'retained_os': sorted(keep), 'factory_retained': factory,
+                    'retained_frontends': sorted(revisions), 'would_remove': [str(p) for p in removals]}
+        # A confirmed trial's original snapshot also named the now-expired
+        # grandparent. Collapse it to its selected rollback before deleting it.
+        if confirmed:
+            rollback_config = single_boot_config(record['old_config'])
+            rollback_ids, rollback_factory = boot_payload_refs(rollback_config)
+            u.require(rollback_ids <= keep and (not rollback_factory or factory), 'Rollback is not retained')
+            record['old_config'] = rollback_config
+            if record['manager_before']['previous'] not in revisions:
+                record['manager_before']['previous'] = None
+            self.save(record)
+            previous = record.get('previous_transaction')
+            if previous in keep and previous != record['id']:
+                prior = u.load(self.root / 'transactions' / previous / 'transaction.json')
+                old_ids, old_factory = boot_payload_refs(prior['old_config'])
+                if not old_ids <= keep or (old_factory and not factory):
+                    prior.update(old_config=rollback_config, new_config=rollback_config,
+                                 manager_before=copy.deepcopy(record['manager_before']),
+                                 previous_transaction=None, rollback_pruned=True)
+                    self.save(prior)
+            with self.flash_writable():
+                for name in keep:
+                    if name in (record['id'], previous):
+                        atomic_text(slots / name / 'previous-extlinux.conf', rollback_config)
+                        atomic_text(slots / name / 'RECOVERY.txt',
+                            'Only current, previous and one trial OS are retained.\n'
+                            'Copy previous-extlinux.conf over extlinux/extlinux.conf to select the retained rollback.\n'
+                            'Older OS payloads have been removed. User content is unchanged.\n')
+                for path in removals:
+                    if path.is_relative_to(self.flash):
+                        shutil.rmtree(path) if path.is_dir() else path.unlink()
+        else:
+            with self.flash_writable():
+                for path in removals:
+                    if path.is_relative_to(self.flash):
+                        shutil.rmtree(path) if path.is_dir() else path.unlink()
+        for path in removals:
+            if not path.is_relative_to(self.flash):
+                shutil.rmtree(path) if path.is_dir() else path.unlink()
+        u.syncdir(manager.revisions)
+        u.syncdir(self.root / 'transactions')
+        self.cache_confirmed_boot(record)
+        result = {'retained_os': sorted(keep), 'factory_retained': factory,
+                  'retained_frontends': sorted(revisions), 'removed': [str(p) for p in removals],
+                  'boot_free_bytes': shutil.disk_usage(self.flash).free}
+        self.event('versions-pruned', **result)
+        return result
+
+    def try_prune_locked(self):
+        try:
+            return self.prune_locked()
+        except (u.UpdateError, OSError, ValueError, KeyError) as error:
+            self.event('retention-deferred', reason=str(error))
+
+    @contextlib.contextmanager
+    def locked(self):
+        with u.Manager(self.root / 'control', self.environment).locked():
+            yield
+
+    def layout(self):
+        if self.layout_probe:
+            return self.layout_probe()
+        mounts = {}
+        for row in Path('/proc/mounts').read_text().splitlines():
+            fields = row.split()
+            if fields[1] in ('/flash', '/storage', '/storage/slotcontent'):
+                mounts[fields[1]] = fields
+        if '/storage/slotcontent' not in mounts:
+            # Recovery must work even when the content mount failed.
+            u.require('/flash' in mounts and '/storage' in mounts, 'Boot/system mounts are missing')
+            device = subprocess.check_output(['/usr/bin/slot-content-device',
+                str(Path(mounts['/flash'][0]).resolve()),
+                str(Path(mounts['/storage'][0]).resolve())], text=True).strip()
+            mounts['/storage/slotcontent'] = [device, '/storage/slotcontent', 'exfat']
+        result, parents = {}, set()
+        for target, label, formats in (('/flash', 'ROCKNIX', ('vfat',)), ('/storage', 'STORAGE', ('ext4',)),
+                                       ('/storage/slotcontent', 'SLOT', ('exfat', 'fuseblk'))):
+            u.require(target in mounts and mounts[target][2] in formats, 'Unexpected/missing partition: ' + target)
+            device = Path(mounts[target][0]).resolve()
+            block = Path('/sys/class/block') / device.name
+            u.require((block / 'partition').exists(), 'Expected a storage partition')
+            parents.add(str(block.resolve().parent))
+            values = subprocess.check_output(['blkid', '-o', 'export', str(device)], text=True)
+            values = dict(line.split('=', 1) for line in values.splitlines() if '=' in line)
+            u.require(values.get('LABEL') == label, 'Unexpected partition label')
+            result[target] = {k: values.get(k) for k in ('UUID', 'PARTUUID', 'LABEL', 'TYPE')}
+        u.require(len(parents) == 1, 'Boot/system/content must be on the same disk')
+        block = Path(next(iter(parents)))
+        sectors = int((block / 'size').read_text())
+        boot_device = Path('/dev') / block.name
+        first_partition = Path(mounts['/flash'][0]).resolve().name
+        prefix = int((Path('/sys/class/block') / first_partition / 'start').read_text()) * 512
+        u.require(1024**2 <= prefix <= 32 * 1024**2, 'Unexpected SD bootloader area')
+        with boot_device.open('rb') as stream:
+            result['gpt_bootloader_sha256'] = hashlib.sha256(stream.read(prefix)).hexdigest()
+            stream.seek((sectors - 33) * 512)
+            result['backup_gpt_sha256'] = hashlib.sha256(stream.read(33 * 512)).hexdigest()
+        return result
+
+    @contextlib.contextmanager
+    def flash_writable(self):
+        if self.environment is not None:
+            yield
+            return
+        subprocess.run(['mount', '-o', 'remount,rw', str(self.flash)], check=True)
+        try:
+            yield
+            os.sync()
+        finally:
+            subprocess.run(['mount', '-o', 'remount,ro', str(self.flash)], check=True)
+
+    @contextlib.contextmanager
+    def mounted_system(self, system):
+        if self.inspector:
+            yield self.inspector(system)
+            return
+        mount = Path(tempfile.mkdtemp(prefix='slot-os-', dir='/run'))
+        mounted = False
+        try:
+            subprocess.run(['mount', '-t', 'squashfs', '-o', 'ro,loop,nosuid,nodev,noexec', str(system), str(mount)], check=True)
+            mounted = True
+            yield mount
+        finally:
+            if mounted:
+                subprocess.run(['umount', str(mount)], check=True)
+            mount.rmdir()
+
+    def verify_bundle(self, package, expected, staging):
+        u.require(bool(u.HASH.fullmatch(expected)) and u.sha(package) == expected, 'OS package SHA-256 mismatch')
+        with tarfile.open(package, 'r:*') as archive:
+            members, total, names = [], 0, set()
+            for entry in archive:
+                u.safe_path(entry.name)
+                u.require(entry.isfile() and entry.name not in names, 'OS package contains non-regular/duplicate members')
+                names.add(entry.name)
+                total += entry.size
+                members.append(entry)
+                u.require(len(members) <= 10000 and total <= MAX_OS_BYTES, 'OS package exceeds limits')
+            manifest = archive.getmember('manifest.json')
+            u.require(manifest.size <= 1024**2, 'OS manifest too large')
+            meta = json.load(archive.extractfile(manifest))
+            u.require(meta.get('schema') in (1, 2) and meta.get('kind') == 'os'
+                      and meta.get('target') == {'device': 'rg353v', 'arch': 'aarch64'}, 'Wrong OS package target/schema')
+            u.require(isinstance(meta.get('id'), str) and len(meta['id']) <= 72 and bool(u.SAFE_ID.fullmatch(meta['id'])), 'Invalid OS package id')
+            inventory = meta['files']
+            u.require(isinstance(inventory, dict), 'Invalid OS inventory')
+            if meta['schema'] == 2:
+                self.reconstruct_delta(archive, meta, names, staging)
+                return meta
+            u.require(names == {'manifest.json'} | {'payload/' + n for n in inventory}
+                      and {'KERNEL', 'SYSTEM'} <= inventory.keys(), 'OS archive inventory mismatch')
+            u.require(shutil.disk_usage(self.root).free > total * 2 + BOOT_RESERVE, 'Insufficient system storage')
+            for name, info in inventory.items():
+                u.require(payload_name(name), 'Unsupported OS payload: ' + name)
+                item = archive.getmember('payload/' + name)
+                u.require(isinstance(info, dict) and type(info.get('size')) is int and item.size == info['size']
+                          and isinstance(info.get('sha256'), str) and bool(u.HASH.fullmatch(info['sha256'])), 'Invalid OS payload descriptor')
+                dest = staging / name
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                with archive.extractfile(item) as source, dest.open('wb') as out:
+                    shutil.copyfileobj(source, out)
+                    out.flush()
+                    os.fsync(out.fileno())
+                u.require(u.sha(dest) == info['sha256'], 'OS payload checksum mismatch')
+            u.require(any(n.startswith('device_trees/') and n.endswith('.dtb') for n in inventory), 'OS package has no device trees')
+        return meta
+
+    def boot_file(self, name):
+        """Resolve logical boot files only within the selected, managed boot root."""
+        u.require(payload_name(name), 'Unsupported delta base file')
+        selected = boot_entries(self.boot_config.read_text())
+        kernel = Path(selected['LINUX'].lstrip('/'))
+        u.require(kernel == Path('KERNEL') or len(kernel.parts) == 3 and kernel.parts[0] == 'slot-os'
+                  and bool(u.SAFE_ID.fullmatch(kernel.parts[1])) and kernel.parts[2] == 'KERNEL',
+                  'Unsupported delta base boot path')
+        base = self.flash / kernel.parent
+        u.require(not base.is_symlink() and base.resolve().is_relative_to(self.flash.resolve()),
+                  'Delta boot root escapes the boot partition')
+        args = arguments(selected)
+        if 'SYSTEM_IMAGE' in args:
+            u.require(args['SYSTEM_IMAGE'] == '/' + (kernel.parent / 'SYSTEM').as_posix(),
+                      'Delta base SYSTEM path differs from selected boot root')
+        path = base / name
+        u.require(path.is_file() and not path.is_symlink()
+                  and path.resolve().is_relative_to(base.resolve()), 'Delta base file is unavailable')
+        return path
+
+    def reconstruct_delta(self, archive, meta, names, staging):
+        """Rebuild immutable boot files; never write into the running base."""
+        u.require(meta.get('base_runtime') == (self.environment or u.runtime()), 'OS delta requires a different runtime')
+        inventory, bases, recipes, patches = (meta.get(k) for k in ('files','base_files','recipes','patches'))
+        u.require(all(isinstance(v, dict) for v in (inventory,bases,recipes,patches)), 'Invalid OS delta metadata')
+        u.require({'KERNEL','SYSTEM'} <= inventory.keys() and set(recipes) == set(inventory)
+                  and set(patches) <= set(inventory)
+                  and names == {'manifest.json'} | {'patch/' + n for n in patches}, 'OS delta inventory mismatch')
+        u.require(any(n.startswith('device_trees/') and n.endswith('.dtb') for n in inventory), 'OS package has no device trees')
+        for entries in (inventory,bases,patches):
+            for name, info in entries.items():
+                u.require(payload_name(name) and isinstance(info,dict) and set(info)=={'size','sha256'}
+                          and type(info['size']) is int and 0 <= info['size'] <= MAX_OS_BYTES
+                          and isinstance(info['sha256'],str) and bool(u.HASH.fullmatch(info['sha256'])),
+                          'Invalid OS delta file descriptor')
+        needed=sum(i['size'] for i in inventory.values())
+        u.require(needed <= MAX_OS_BYTES and shutil.disk_usage(self.root).free >= needed + BOOT_RESERVE,
+                  'Insufficient system storage for reconstructed OS')
+        for name, info in bases.items():
+            path=self.boot_file(name)
+            u.require(path.stat().st_size==info['size'] and u.sha(path)==info['sha256'], 'OS delta base checksum mismatch')
+        operation_count=0
+        for name, info in inventory.items():
+            recipe=recipes[name]
+            u.require(isinstance(recipe, list), 'Invalid OS delta recipe')
+            operation_count+=len(recipe)
+            u.require(operation_count <= 100000, 'Too many OS delta operations')
+            patch=patches.get(name)
+            literal=archive.extractfile('patch/'+name) if patch else None
+            if patch:
+                u.require(archive.getmember('patch/'+name).size==patch['size'], 'OS delta patch size mismatch')
+            source=self.boot_file(name).open('rb') if name in bases else None
+            dest=staging/name
+            dest.parent.mkdir(parents=True,exist_ok=True)
+            written,literal_offset=0,0
+            patch_hash=hashlib.sha256()
+            try:
+                with dest.open('xb') as out:
+                    for operation in recipe:
+                        u.require(isinstance(operation,list) and len(operation)==3, 'Invalid OS delta operation')
+                        kind,offset,length=operation
+                        u.require(type(offset) is int and type(length) is int and offset>=0 and length>0
+                                  and written+length <= info['size'], 'OS delta range exceeds target')
+                        if kind=='copy':
+                            u.require(source is not None and offset+length<=bases[name]['size'], 'OS delta range exceeds base')
+                            stream=source;stream.seek(offset)
+                        else:
+                            u.require(kind=='data' and literal is not None and offset==literal_offset
+                                      and offset+length<=patch['size'], 'Invalid OS delta literal range')
+                            stream=literal;literal_offset+=length
+                        remaining=length
+                        while remaining:
+                            block=stream.read(min(1024**2,remaining))
+                            u.require(bool(block), 'Truncated OS delta data')
+                            out.write(block);remaining-=len(block)
+                            if kind=='data':patch_hash.update(block)
+                        written+=length
+                    out.flush();os.fsync(out.fileno())
+                u.require(written==info['size'] and literal_offset==(patch['size'] if patch else 0), 'Incomplete OS delta recipe')
+                u.require(not patch or patch_hash.hexdigest()==patch['sha256'], 'OS delta patch checksum mismatch')
+                u.require(u.sha(dest)==info['sha256'], 'Reconstructed OS checksum mismatch')
+            finally:
+                if source:source.close()
+                if literal:literal.close()
+
+    def prepare(self, package, expected, check_only=False):
+        with self.locked(), self.manager().locked():
+            previous = self.active()
+            u.require(previous is None or previous['phase'] == 'confirmed', 'Finish or roll back the pending OS update first')
+            u.require(self.environment is not None or Path('/storage/slotcontent').is_mount(), 'Content partition must be mounted before installing')
+            layout = self.layout()
+            manager = self.manager()
+            before = manager.state()
+            u.require(before['pending'] is None, 'Finish the pending frontend/core update first')
+            current = manager.verify_revision(before['current'])
+            tmp = Path(tempfile.mkdtemp(prefix='.stage-', dir=self.root))
+            try:
+                meta = self.verify_bundle(package, expected, tmp)
+                with self.mounted_system(tmp / 'SYSTEM') as system:
+                    installed_modules=self.system_root/'usr/share/slot/modules-v1.json'
+                    if installed_modules.exists():
+                        selected=u.normalize_modules(u.load(installed_modules))
+                        incoming=u.os_module_policy(system)
+                        u.require(incoming is not None and incoming['selected']==selected['selected'],
+                                  'This firmware does not preserve the installed module selection')
+                        u.module_files(system,selected,excluded_only=True)
+                    actual = inspect_system(system, tmp / 'KERNEL')
+                    u.require(actual == {k: meta[k] for k in ('runtime', 'profile', 'compat')}, 'OS contents do not match manifest')
+                    source = system / 'usr/share/slot/System'
+                    snapshot = u.files(source)
+                    incoming_modules=u.module_policy(source)
+                    u.require(u.module_selection(incoming_modules)==u.module_selection(current.get('modules')),
+                              'OS update changes installed module selection')
+                    u.module_files(source,current.get('modules'),excluded_only=True)
+                    effective_compat = preserved_contract(meta['compat'], current, snapshot)
+                    if not check_only:
+                        factory = tmp / 'factory/System'
+                        u.require(shutil.disk_usage(self.root).free >= sum(v['size'] for v in snapshot.values()) + BOOT_RESERVE,
+                                  'Insufficient system storage for frontend staging')
+                        shutil.copytree(source, factory)
+                        u.require(u.files(factory) == snapshot, 'Factory System changed during staging')
+                config = self.boot_config.read_text()
+                selected = boot_entries(config)
+                args = arguments(selected)
+                validate_storage_arguments(args, layout)
+                if 'FDT' in selected:
+                    u.require('device_trees/' + Path(selected['FDT']).name in meta['files'], 'Required panel/device tree is missing')
+                if not check_only and previous is not None:
+                    self.prune_locked()
+                required = sum(i['size'] for i in meta['files'].values()) + BOOT_RESERVE
+                u.require(shutil.disk_usage(self.flash).free >= required, 'Insufficient boot-partition space')
+                new_config = new_boot_config(config, meta['id'])
+                if check_only:
+                    self.event('os-package-verified', version=meta['id'])
+                    return meta
+                u.ensure_stopped()
+                u.require(not any(line.startswith('cart=') and line != 'cart='
+                                  for line in Path('/storage/slotcontent/Config/slot.state').read_text().splitlines())
+                          if self.environment is None else True, 'Eject the game before installing an OS update')
+                version = meta['id']
+                target = self.root / 'transactions' / version
+                boot_target = self.flash / 'slot-os' / version
+                u.require(not target.exists() and not boot_target.exists(), 'OS version already staged')
+                revision_id = 'os-' + version
+                u.require(bool(u.SAFE_ID.fullmatch(revision_id)) and not (manager.revisions / revision_id).exists(), 'OS revision id is unavailable')
+                record = {'schema': 1, 'id': version, 'phase': 'prepared', 'layout': layout,
+                          'old_config': config, 'new_config': new_config,
+                          'manager_before': before, 'candidate': revision_id,
+                          'previous_transaction': previous['id'] if previous else None,
+                          'runtime': meta['runtime'], 'profile': meta['profile'],
+                          'compat': effective_compat, 'files': meta['files']}
+                factory_meta = {'schema': 1, 'id': revision_id, 'runtime': meta['runtime'],
+                                'compat': effective_compat, 'files': snapshot, 'kind': 'os', 'modules': incoming_modules}
+                u.atomic_json(tmp / 'factory/revision.json', factory_meta)
+                manager.flush(tmp / 'factory')
+                (tmp / 'factory').rename(manager.revisions / revision_id)
+                u.syncdir(manager.revisions)
+                target.parent.mkdir(exist_ok=True)
+                target.mkdir()
+                self.save(record)
+                u.atomic_json(self.pointer, {'schema': 1, 'transaction': version})
+                with self.flash_writable():
+                    boot_target.parent.mkdir(exist_ok=True)
+                    partial = boot_target.with_name('.' + version + '.partial')
+                    u.require(not partial.exists(), 'An incomplete boot stage needs inspection')
+                    partial.mkdir()
+                    for name in meta['files']:
+                        dest = partial / name
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(tmp / name, dest)
+                        u.require(u.sha(dest) == meta['files'][name]['sha256'], 'Boot copy checksum mismatch')
+                    atomic_text(partial / 'previous-extlinux.conf', config)
+                    atomic_text(partial / 'RECOVERY.txt',
+                                'Power off and insert the card in a computer. Copy previous-extlinux.conf\n'
+                                'from this folder over extlinux/extlinux.conf on the ROCKNIX volume.\n'
+                                'Keep the current and previous OS directories. Eject and boot normally.\n'
+                                'The previous OS guard restores its matching frontend selection.\n')
+                    manager.flush(partial)
+                    partial.rename(boot_target)
+                    u.syncdir(boot_target.parent)
+                    u.require(self.layout() == layout, 'Partition identity changed during staging')
+                    atomic_text(self.boot_config, new_config)
+                record['phase'] = 'staged'
+                self.save(record)
+                self.event('os-staged', version=version, reboot_required=True)
+                return meta
+            finally:
+                shutil.rmtree(tmp)
+
+    def boot_id(self):
+        return arguments({'APPEND': Path('/proc/cmdline').read_text()}).get('SLOT_OS_ID')
+
+    def boot_instance(self):
+        return Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+
+    def cache_confirmed_boot(self, record):
+        try:
+            self.write_confirmed_boot_cache(record)
+        except OSError as error:
+            # The guard already validated this boot. An optional cache must
+            # never turn a full/read-only storage volume into an OS failure.
+            print('Confirmed-boot cache unavailable: ' + str(error), flush=True)
+
+    def write_confirmed_boot_cache(self, record):
+        # Nothing about a pending trial is cached. A different kernel, image,
+        # transaction, boot selector or cmdline ID must take the full guard.
+        if self.environment is not None or record['phase'] != 'confirmed':
+            return
+        paths = [self.pointer, self.root / 'transactions' / record['id'] / 'transaction.json',
+                 self.boot_config, Path('/etc/os-release'),
+                 self.system_root / 'usr/share/slot/os-profile.json']
+        marker = self.root / 'normal-boot.id'
+        atomic_text(marker, record['id'] + '\n' + u.platform.release() + '\n')
+        paths.append(marker)
+        atomic_text(self.root / 'normal-boot.sha256',
+                    ''.join(f'{u.sha(path)}  {path}\n' for path in paths))
+
+    def boot(self):
+        with self.locked(), self.manager().locked():
+            record = self.active()
+            if record is None:
+                return
+            u.require(self.boot_id() == record['id'], 'Previous OS selected; restore its frontend association')
+            if record['phase'] == 'confirmed':
+                self.cache_confirmed_boot(record)
+                return
+            u.require(self.layout() == record['layout'], 'Boot partition identity mismatch')
+            u.require(u.runtime() == record['runtime'] if self.environment is None else self.environment == record['runtime'], 'Booted OS runtime mismatch')
+            u.require(u.load(self.system_root / 'usr/share/slot/os-profile.json') == record['profile'], 'Booted profile mismatch')
+            manager = self.manager()
+            manager.verify_revision(record['candidate'])
+            state = manager.state()
+            if state['current'] == record['candidate'] and state['pending'] is None:
+                return
+            boot_instance = self.boot_instance()
+            if record['phase'] == 'booting':
+                u.require(record.get('boot_instance') == boot_instance, 'OS trial restarted before confirmation')
+                return
+            u.require(state == record['manager_before'], 'Frontend changed after OS staging')
+            state['pending'] = {'id': record['candidate'], 'attempts': 0}
+            u.atomic_json(manager.state_path, state)
+            record['phase'] = 'booting'
+            record['boot_instance'] = boot_instance
+            self.save(record)
+            self.event('os-trial-started', version=record['id'])
+
+    def confirm(self):
+        with self.locked(), self.manager().locked():
+            record = self.active()
+            if record is None or record['phase'] == 'confirmed':
+                return True
+            if self.boot_id() != record['id']:
+                return False
+            manager = self.manager()
+            state = manager.state()
+            if state['current'] != record['candidate'] or state['pending'] is not None:
+                return False
+            manager.verify_revision(record['candidate'])
+            u.require(self.layout() == record['layout'], 'Layout changed after OS boot')
+            record['phase'] = 'confirmed'
+            self.save(record)
+            self.event('os-confirmed', version=record['id'])
+            self.try_prune_locked()
+            self.cache_confirmed_boot(record)
+            return True
+
+    def rollback(self):
+        with self.locked(), self.manager().locked():
+            record = self.active()
+            u.require(record is not None, 'No OS update to roll back')
+            u.require(not record.get('rollback_pruned'), 'No older OS is retained by the three-version policy')
+            u.require(self.layout() == record['layout'], 'Partition identity changed; refusing rollback')
+            config = self.boot_config.read_text()
+            u.require(config in (record['old_config'], record['new_config']), 'Boot configuration was changed outside the updater')
+            manager = self.manager()
+            baseline = record['manager_before']['current']
+            old = manager.revision(baseline)
+            u.require(u.files(old / 'System') == u.load(old / 'revision.json')['files'], 'Rollback frontend is damaged')
+            record['phase'] = 'rolling-back'
+            self.save(record)
+            with self.flash_writable():
+                atomic_text(self.boot_config, record['old_config'])
+            u.atomic_json(manager.state_path, record['manager_before'])
+            u.atomic_json(self.pointer, {'schema': 1, 'transaction': record['previous_transaction']})
+            record['phase'] = 'rolled-back'
+            self.save(record)
+            self.event('os-rollback', rejected=record['id'], reboot_required=True)
+
+    def monitor(self):
+        record = self.active()
+        if record is None or record['phase'] == 'confirmed' or self.boot_id() != record['id']:
+            return
+        deadline = time.monotonic() + HEALTH_TIMEOUT
+        while time.monotonic() < deadline:
+            try:
+                if self.confirm():
+                    return
+            except u.UpdateBusy:
+                # The frontend confirms under this same nonblocking lock.
+                # Contention is not a failed health check or a rollback request.
+                pass
+            except (u.UpdateError, OSError, ValueError, KeyError):
+                break
+            time.sleep(1)
+        self.rollback()
+        subprocess.run(['systemctl', 'reboot'], check=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    for name in ('check', 'install'):
+        p = commands.add_parser(name)
+        p.add_argument('package', type=Path)
+        p.add_argument('--sha256', required=True)
+    for name in ('status', 'boot', 'monitor', 'rollback'):
+        commands.add_parser(name)
+    commands.add_parser('prune').add_argument('--dry-run', action='store_true')
+    args = parser.parse_args()
+    u.runtime()
+    manager = OSManager()
+    if args.command in ('check', 'install'):
+        manager.prepare(args.package, args.sha256, check_only=args.command == 'check')
+    elif args.command == 'status':
+        print(json.dumps(manager.active(), indent=2))
+    elif args.command == 'boot':
+        try:
+            manager.boot()
+        except u.UpdateBusy:
+            raise
+        except (u.UpdateError, OSError, ValueError, KeyError):
+            if manager.active() and (manager.active()['phase'] != 'confirmed'
+                                     or manager.boot_config.read_text() == manager.active()['old_config']):
+                manager.rollback()
+                subprocess.run(['systemctl', 'reboot'], check=True)
+            raise
+    elif args.command == 'monitor':
+        manager.monitor()
+    elif args.command == 'rollback':
+        u.ensure_stopped()
+        manager.rollback()
+    elif args.command == 'prune':
+        print(json.dumps(manager.prune(check_only=args.dry_run), indent=2))
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (u.UpdateError, OSError, ValueError, KeyError, tarfile.TarError, subprocess.SubprocessError) as error:
+        print('Slot OS update stopped: ' + str(error), file=sys.stderr)
+        sys.exit(1)

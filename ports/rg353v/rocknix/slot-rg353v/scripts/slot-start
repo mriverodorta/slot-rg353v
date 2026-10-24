@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+[ ! -e /run/slot-usb/active ] || exit 1
+export SLOT_ROOT="${SLOT_ROOT:-/storage/slotcontent}"
+mountpoint -q "$SLOT_ROOT"
+# Only an explicitly started, unfinished OTA session changes startup. This
+# shell-only test adds no Python/network work to ordinary offline boots.
+unset SLOT_OTA_RESUME
+if [ -f /storage/slot-downloads/session.json ] && [ -x /usr/bin/slot-ota ]; then
+  export SLOT_OTA_RESUME=1
+fi
+mkdir -p "$SLOT_ROOT/Diagnostics"
+exec > "$SLOT_ROOT/Diagnostics/slot-startup.log" 2>&1
+if [ ! -f /storage/slot-manager/state.json ]; then
+  /usr/share/slot/System/slot --init-root "$SLOT_ROOT"
+fi
+exec /usr/bin/slot-normal-start

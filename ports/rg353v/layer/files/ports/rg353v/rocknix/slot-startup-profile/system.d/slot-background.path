@@ -1,0 +1,9 @@
+[Unit]
+Description=Start optional services after the first Slot frame
+
+[Path]
+PathExists=/run/slot-boot/frontend/first-frame
+Unit=slot-background.service
+
+[Install]
+WantedBy=rocknix.target

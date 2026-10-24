@@ -1,0 +1,21 @@
+#!/bin/sh
+# Full Python validation remains mandatory for every pending/recovery boot.
+set -eu
+root=/storage/slot-os-updates
+id=
+for arg in $(cat /proc/cmdline); do
+  case "$arg" in SLOT_OS_ID=*) id=${arg#SLOT_OS_ID=} ;; esac
+done
+if [ ! -e "$root/state.json" ] && [ -z "$id" ]; then
+  echo 'No OS update pending (factory boot)'
+  exit 0
+fi
+if [ -f "$root/normal-boot.id" ] && [ -f "$root/normal-boot.sha256" ]; then
+  if { read -r expected && read -r kernel; } < "$root/normal-boot.id" &&
+     [ "$id" = "$expected" ] && [ "$(uname -r)" = "$kernel" ] &&
+     sha256sum -c "$root/normal-boot.sha256" >/dev/null 2>&1; then
+    echo 'OS update already confirmed; native guard passed'
+    exit 0
+  fi
+fi
+exec /usr/bin/slot-os-update "$@"

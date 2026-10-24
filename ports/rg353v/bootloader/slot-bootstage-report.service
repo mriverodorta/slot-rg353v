@@ -1,0 +1,9 @@
+[Unit]
+Description=Save experimental bootloader timings after startup
+After=storage-slotcontent.service
+ConditionPathExists=/sys/firmware/devicetree/base/bootstage
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /storage/.config/slot-bootstage-read.py --save-dir /storage/slotcontent/Diagnostics/Bootloader

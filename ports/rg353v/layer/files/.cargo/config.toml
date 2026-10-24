@@ -1,0 +1,2 @@
+[env]
+SLOT_SILENT = { value = "1", force = false }

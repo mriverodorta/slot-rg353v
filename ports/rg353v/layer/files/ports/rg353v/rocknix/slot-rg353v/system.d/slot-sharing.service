@@ -1,0 +1,19 @@
+[Unit]
+Description=Slot SMB file sharing (ksmbd)
+After=storage-slotcontent.service
+Requires=storage-slotcontent.service
+ConditionPathExists=/run/slot-services/sharing.on
+ConditionPathExists=!/run/slot-usb/active
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/slot-ksmbd load
+ExecStart=/usr/sbin/ksmbd.mountd -n -C /run/ksmbd/ksmbd.conf -P /run/ksmbd/ksmbdpwd.db
+ExecStop=/usr/sbin/ksmbd.control --shutdown
+ExecStopPost=/usr/bin/slot-ksmbd unload
+TimeoutStopSec=15
+KillMode=control-group
+Restart=on-failure
+RestartSec=2
+
+# Session grants start this service explicitly. It is never enabled at boot.

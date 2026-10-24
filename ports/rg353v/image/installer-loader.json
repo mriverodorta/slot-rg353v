@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "target": "rg353v-panel-v2",
+  "sha256": "34349d124e47038a3203ca9cb69c8394a109adf008d250f3f8965539f8a2fb06",
+  "bytes": 9991680,
+  "offset": 32768,
+  "emmc_select": true,
+  "sd_clock_fix": true,
+  "provenance": "emmc-install-validation.json: tested normal eMMC and F-held TF1 boot"
+}

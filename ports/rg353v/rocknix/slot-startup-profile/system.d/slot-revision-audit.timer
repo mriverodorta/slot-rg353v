@@ -1,0 +1,7 @@
+[Unit]
+Description=Defer complete revision audit until after the shelf
+
+[Timer]
+OnActiveSec=3s
+AccuracySec=250ms
+Unit=slot-revision-audit.service

@@ -1,0 +1,12 @@
+[Unit]
+Description=Confirm the Slot OS trial or restore the previous boot configuration
+After=storage.mount slot-os-guard.service
+Requires=storage.mount
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/slot-os-boot monitor
+TimeoutStopSec=5
+
+[Install]
+WantedBy=rocknix.target

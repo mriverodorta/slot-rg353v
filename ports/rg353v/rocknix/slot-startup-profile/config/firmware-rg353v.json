@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "remove_families": ["brcm", "rtw89", "rtlwifi", "mediatek", "ath6k", "ath9k_htc"],
+  "remove_files": ["rt2870.bin", "rt73.bin", "htc_7010.fw", "htc_9271.fw", "ath3k-1.fw", "mt7662.bin", "mt7662_rom_patch.bin", "carl9170-1.fw", "ar5523.bin", "mt7601u.bin", "vntwusb.fw"],
+  "keep_in_family": {
+    "rtw88": ["rtw8821c_fw.bin"],
+    "rtl_bt": ["rtl8821cs_config.bin", "rtl8821cs_fw.bin", "rtl8821c_config.bin", "rtl8821c_fw.bin"]
+  },
+  "required_sha256": {
+    "rtw88/rtw8821c_fw.bin": "2ef409bc418549fcf294061dd0cae1fc22fd9da79b60524950b25de18732f3f0",
+    "rtl_bt/rtl8821cs_config.bin": "6ddeb15f23588053e00cb08d25588bd7cf98d60fa93d9478efcef4ae8064a7ac",
+    "rtl_bt/rtl8821cs_fw.bin": "3baa2eeaa43c959054687a67771e7435e73b2ff3e79dfb765121d8b7dc719391",
+    "rtl_bt/rtl8821c_config.bin": "292717b0610ce920f66b734c299d349ea59a4c4400044078d8fc65625f17e382",
+    "rtl_bt/rtl8821c_fw.bin": "dfe7ef772d078ec09490c02190a32fcd40b3eaf3b040049d8930eb80e6d5743c",
+    "regulatory.db": "2fb33ca0074db573e05ef7dd50bb45b63c0ff98b7e852e1105ebad536fae8e6b",
+    "regulatory.db.p7s": "c941c08f51c93e46722293b85631604c3740d86c3de0c75f79aef50d2e919179"
+  }
+}

@@ -1,0 +1,13 @@
+[Unit]
+Description=Validate the pending Slot OS before starting the frontend
+After=storage.mount storage-slotcontent.service
+Requires=storage.mount
+Before=slot-rg353v.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/slot-os-boot boot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=rocknix.target

@@ -1,0 +1,11 @@
+Perfect overlays and DMG palette, unmodified, from Retro Game Corps RGC Overlay Pack v1.0.
+Source: https://github.com/retrogamecorps/RGC-Overlay-Pack
+Commit: a1624d98af4cb0d4af2ff0b21d26d0131a1e4631
+Guide: https://retrogamecorps.com/2024/09/01/guide-shaders-and-overlays-on-retro-handhelds/
+Artwork: 1playerinsertcoin, adapted by mugwomp93. Pack assembled by Russ / Retro Game Corps.
+Original packs: https://github.com/mugwomp93/muOS_Customization
+No explicit artwork license is supplied by the RGC pack; these credits do not grant a new license.
+
+Perfect_GB-DMG.png sha256:2eebb07d92cd0120abe2e46b26243ffc8640a5bea5da14dfc2e5e7b1c167747e
+Perfect_GBA.png sha256:146f1d37deb59b218de4f595e8ee4e296cde158026f7542ed3263200d2428b03
+Perfect_GBC.png sha256:8177db0df560af35f1da6f11274cde7e63be5a641d4bef13499c846739b8a980

@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "device": "rg353v",
+  "arch": "aarch64",
+  "slot_update_api": 1,
+  "settings_contract": 1,
+  "sram_contract": 1,
+  "storage": {
+    "boot_label": "ROCKNIX",
+    "system_label": "STORAGE",
+    "content_label": "SLOT",
+    "content_filesystem": "exfat",
+    "content_mount": "/storage/slotcontent"
+  }
+}

@@ -1,0 +1,12 @@
+diff --git a/config/optimize b/config/optimize
+--- a/config/optimize
++++ b/config/optimize
+@@ -9,7 +9,7 @@
+ TARGET_INCDIR="$SYSROOT_PREFIX/include $SYSROOT_PREFIX/usr/include"
+ 
+ HOST_CPPFLAGS=""
+-HOST_CFLAGS="-march=x86-64 -mtune=generic -O2 -DNDEBUG -Wall -pipe -I$TOOLCHAIN/include"
++HOST_CFLAGS="-O2 -DNDEBUG -Wall -pipe -I$TOOLCHAIN/include"
+ HOST_CXXFLAGS="$HOST_CFLAGS"
+ HOST_LDFLAGS="-Wl,-rpath,$TOOLCHAIN/lib -L$TOOLCHAIN/lib"
+ HOST_INCDIR="$TOOLCHAIN/include /usr/include"

@@ -1,0 +1,10 @@
+[Unit]
+Description=Slot deferred RG353V USB 2 host controllers
+After=slot-rg353v.service
+ConditionPathExists=/run/slot-boot/frontend.displayed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/slot-usb-host-start
+RemainAfterExit=yes
+TimeoutStartSec=15

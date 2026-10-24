@@ -1,0 +1,18 @@
+[Unit]
+Description=Mount Slot exFAT content by direct filesystem probe
+# Initramfs already mounted boot/storage and populated devtmpfs on this MMC.
+# The native same-disk probe uses those block nodes without a udev database.
+DefaultDependencies=no
+After=storage.mount
+Requires=storage.mount
+Before=slot-rg353v.service shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/slot-mount-content
+RemainAfterExit=yes
+TimeoutStartSec=30
+
+[Install]
+WantedBy=rocknix.target

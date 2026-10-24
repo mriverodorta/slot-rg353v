@@ -1,0 +1,9 @@
+[Unit]
+Description=Configure RK817 analog audio after the first Slot frame
+
+[Path]
+PathExists=/run/slot-boot/frontend/first-frame
+Unit=slot-speaker.service
+
+[Install]
+WantedBy=rocknix.target

@@ -1,0 +1,23 @@
+From: Slot RG353V build
+Subject: [PATCH] wifi: rtw88: keep regulatory hardware writes on a running radio
+
+Keep the regulatory state and adaptivity data current while the device is
+stopped, but avoid SDIO transactions until normal channel configuration
+reapplies transmit power after start. The existing device mutex serializes
+this check with core stop/start. This fixes the captured regulatory disconnect
+work versus mmc_sdio_resume host-claim deadlock.
+
+---
+--- a/drivers/net/wireless/realtek/rtw88/regd.c
++++ b/drivers/net/wireless/realtek/rtw88/regd.c
+@@ -487,7 +487,9 @@
+ 			  request->initiator);
+ 
+ 	rtw_phy_adaptivity_set_mode(rtwdev);
+-	rtw_phy_set_tx_power_level(rtwdev, hal->current_channel);
++	/* Channel configuration reapplies power when the stopped radio starts. */
++	if (test_bit(RTW_FLAG_RUNNING, rtwdev->flags))
++		rtw_phy_set_tx_power_level(rtwdev, hal->current_channel);
+ 	mutex_unlock(&rtwdev->mutex);
+ }
+ 

@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+"""Bounded boot reports, captured after the first visible Slot frame."""
+import argparse
+import csv
+import io
+import json
+import math
+import os
+from pathlib import Path
+import re
+import subprocess
+import time
+
+ROOT = Path('/run/slot-boot')
+ENABLED = Path('/storage/.config/slot-boot-profiler.enabled')
+OUTPUT = Path('/storage/slotcontent/Diagnostics/BootProfiles')
+KEEP = 10
+MAX_REPORT = 2 * 1024 * 1024
+PROPERTIES = ['Id', 'Description', 'LoadState', 'ActiveState', 'SubState', 'Result',
+              'Type', 'After', 'Requires', 'Wants', 'NRestarts',
+              'InactiveExitTimestampMonotonic', 'ActiveEnterTimestampMonotonic',
+              'ExecMainStartTimestampMonotonic', 'ExecMainExitTimestampMonotonic',
+              'InactiveEnterTimestampMonotonic']
+MANAGER = ['KernelTimestampMonotonic', 'InitRDTimestampMonotonic',
+           'UserspaceTimestampMonotonic', 'FinishTimestampMonotonic']
+
+
+def command(args, timeout=8):
+    p = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    if p.returncode:
+        raise RuntimeError(args[0] + ' failed: ' + str(p.returncode))
+    return p.stdout
+
+
+def blocks(text):
+    return [dict(line.split('=', 1) for line in block.splitlines() if '=' in line)
+            for block in text.strip().split('\n\n') if block.strip()]
+
+
+def unit_command(names):
+    # The root mount is named -.mount, so option parsing must end before unit names.
+    return ['systemctl', 'show', '--no-pager', *[x for p in PROPERTIES for x in ('-p', p)], '--', *names]
+
+
+def optional_command(args):
+    try:
+        return command(args, timeout=12)
+    except (RuntimeError, subprocess.TimeoutExpired) as error:
+        return 'Unavailable: ' + str(error)
+
+
+def seconds(value):
+    try:
+        number = float(value)
+        return number if math.isfinite(number) and 0 < number < 86400 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def marks(folder):
+    if not folder.is_dir():
+        return {}
+    return {p.name: v for p in sorted(folder.iterdir())
+            if p.is_file() and re.fullmatch(r'[A-Za-z0-9_.-]{1,128}', p.name)
+            and (v := seconds(p.read_text()[:64])) is not None}
+
+
+def intervals(begins, ends):
+    result = []
+    for name in sorted(set(begins) | set(ends)):
+        a, b = begins.get(name), ends.get(name)
+        result.append({'name': name, 'start_s': a, 'end_s': b,
+                       'duration_s': b - a if a is not None and b is not None and b >= a else None})
+    return sorted(result, key=lambda row: (row['start_s'] if row['start_s'] is not None else float('inf'), row['name']))
+
+
+def frontend_intervals(points):
+    ordered = sorted(points.items(), key=lambda pair: pair[1])
+    return [{'name': name, 'start_s': ordered[i-1][1], 'end_s': end,
+             'duration_s': end - ordered[i-1][1]}
+            for i, (name, end) in enumerate(ordered) if i]
+
+
+def unit_timeline(units, shelf):
+    rows = []
+    for u in units:
+        def at(key):
+            try:
+                v = int(u.get(key, '0'))
+                return v / 1e6 if v > 0 else None
+            except ValueError:
+                return None
+        start = at('InactiveExitTimestampMonotonic')
+        end = at('ActiveEnterTimestampMonotonic')
+        if start is not None and (end is None or end < start):
+            exited = at('ExecMainExitTimestampMonotonic')
+            end = exited if exited is not None and exited >= start else None
+        rows.append({**u, 'start_s': start, 'end_s': end,
+                     'activation_s': end - start if start is not None and end is not None else None,
+                     'after_shelf': end is not None and shelf is not None and end > shelf})
+    return sorted(rows, key=lambda row: (row['start_s'] if row['start_s'] is not None else float('inf'), row.get('Id', '')))
+
+
+def disjoint_stages(init_entry, userspace, unit_start, frontend, shelf):
+    boundaries = [('Kernel entry → initramfs /init', 0., init_entry),
+                  ('Initramfs → systemd', init_entry, userspace),
+                  ('systemd → Slot service', userspace, unit_start),
+                  ('Slot launcher → Rust entry', unit_start, frontend),
+                  ('Slot frontend → first scene swap', frontend, shelf)]
+    return [{'name': name, 'start_s': a, 'end_s': b,
+             'duration_s': b - a if a is not None and b is not None and b >= a else None}
+            for name, a, b in boundaries]
+
+
+def summarize(report):
+    f = report['frontend_marks']
+    manager = report['manager']
+    userspace = int(manager.get('UserspaceTimestampMonotonic', '0')) / 1e6 or None
+    slot = next((u for u in report['units'] if u.get('Id') == 'slot-rg353v.service'), {})
+    service_start = int(slot.get('ExecMainStartTimestampMonotonic', '0')) / 1e6 or None
+    shelf = f.get('first-frame')
+    return {'first_scene_swap_s': shelf,
+            'first_splash_frame_s': report['end_marks'].get('splash-first-frame'),
+            'stages': disjoint_stages(report.get('init_entry_s'), userspace, service_start, f.get('start'), shelf),
+            'init_steps': intervals(report['begin_marks'], report['end_marks']),
+            'frontend_steps': frontend_intervals(f),
+            'units': unit_timeline(report['units'], shelf)}
+
+
+def markdown(report):
+    summary = report['summary']
+    def val(x):
+        return 'unmeasured' if x is None else f'{x:.3f}'
+    lines = ['# Slot boot profile', '', 'Boot ID: ' + report['boot_id'], '',
+             'Clock: Linux CLOCK_MONOTONIC, seconds since kernel entry. All timestamps use this clock.', '',
+             'Boot type: unclassified; record cold power-on or warm reboot externally.',
+             'Power-button/rumble → kernel entry is unmeasured. No firmware duration is inferred.',
+             'First scene swap is the software display endpoint; physical panel latency is not measured.', '',
+             'Kernel entry → first splash framebuffer write: ' + val(summary.get('first_splash_frame_s')) + ' s.', '',
+             'Kernel entry → first Slot scene swap: ' + val(summary['first_scene_swap_s']) + ' s.', '',
+             '## Non-overlapping stages', '', '| Stage | Start s | End s | Duration s |', '|---|---:|---:|---:|']
+    for row in summary['stages']:
+        lines.append('| ' + row['name'] + ' | ' + ' | '.join(val(row[k]) for k in ('start_s', 'end_s', 'duration_s')) + ' |')
+    for heading, rows in [('Initramfs and individual hardware scripts', summary['init_steps']), ('Slot frontend stages (named by completion)', summary['frontend_steps'])]:
+        lines += ['', '## ' + heading, '', '| Step | Start s | End s | Duration s |', '|---|---:|---:|---:|']
+        for row in rows:
+            lines.append('| ' + row['name'] + ' | ' + ' | '.join(val(row[k]) for k in ('start_s', 'end_s', 'duration_s')) + ' |')
+    lines += ['', '## Slowest unit activations', '',
+              'These overlap; do not add them. Active means the unit reports ready, not that Wi-Fi is associated.', '',
+              '| Unit | Start s | Ready/exit s | Activation s | Finishes after shelf |', '|---|---:|---:|---:|---|']
+    for row in sorted(summary['units'], key=lambda r: r['activation_s'] or 0, reverse=True)[:40]:
+        if row['start_s'] is not None:
+            lines.append('| ' + row.get('Id', '') + ' | ' + ' | '.join(val(row[k]) for k in ('start_s', 'end_s', 'activation_s')) + ' | ' + str(row['after_shelf']) + ' |')
+    lines += ['', '## systemd critical chain', '',
+              'The following native output uses time relative to systemd userspace start; add the userspace offset above to compare with kernel-relative tables.', '', '```text', report.get('critical_chain', '').strip(), '```', '',
+              'Capture phase: ' + report.get('capture_phase', 'unknown') + '. A shelf snapshot is saved before waiting for background completion. Reports are collected after the shelf appears. Startup markers write only to /run; report generation and SVG export are outside the measured interval. Up to ten boots are retained.', '']
+    return '\n'.join(lines)
+
+
+def store(report, output=OUTPUT, plot=''):
+    output.mkdir(parents=True, exist_ok=True)
+    boot = report['boot_id']
+    if not re.fullmatch(r'[a-f0-9-]{36}', boot):
+        raise ValueError('Invalid boot ID')
+    raw = json.dumps(report, indent=2, sort_keys=True) + '\n'
+    if len(raw.encode()) > MAX_REPORT:
+        raise ValueError('Boot report exceeds size bound')
+    files = {'json': raw, 'md': markdown(report)}
+    csvout = io.StringIO()
+    writer = csv.writer(csvout)
+    writer.writerow(['category', 'step', 'start_s', 'end_s', 'duration_s'])
+    for category, key in [('stage', 'stages'), ('init_or_hardware', 'init_steps'), ('frontend', 'frontend_steps')]:
+        for row in report['summary'][key]:
+            writer.writerow([category, row['name'], row['start_s'], row['end_s'], row['duration_s']])
+    for row in report['summary']['units']:
+        writer.writerow(['unit_parallel', row.get('Id'), row['start_s'], row['end_s'], row['activation_s']])
+    files['csv'] = csvout.getvalue()
+    if plot and len(plot.encode()) <= MAX_REPORT:
+        files['svg'] = plot
+    # Publish JSON last: its existence commits the related text/CSV snapshot.
+    for suffix, data in sorted(files.items(), key=lambda item: item[0] == 'json'):
+        destination = output / ('boot-' + boot + '.' + suffix)
+        part = destination.with_suffix('.' + suffix + '.tmp')
+        with part.open('w') as file:
+            file.write(data)
+            file.flush()
+            os.fsync(file.fileno())
+        part.replace(destination)
+    try:
+        fd = os.open(output, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
+    reports = sorted(output.glob('boot-*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
+    for old in reports[KEEP:]:
+        for suffix in ('json', 'md', 'csv', 'svg'):
+            old.with_suffix('.' + suffix).unlink(missing_ok=True)
+
+
+def collect_once():
+    manager = blocks(command(['systemctl', 'show', '--no-pager', *[x for p in MANAGER for x in ('-p', p)]]))[0]
+    listing = command(['systemctl', 'list-units', '--all', '--plain', '--no-legend', '--no-pager', '--type=service,mount,socket,target,device'])
+    names = [line.split()[0] for line in listing.splitlines() if line.split()]
+    units = blocks(command(unit_command(names), timeout=12))
+    kernel = command(['journalctl', '-b', '-k', '--no-pager', '-o', 'short-monotonic'], timeout=12)
+    match = re.search(r'\[\s*(\d+\.\d+)\].*Run /init as init process', kernel)
+    try:
+        metadata = json.loads(Path('/usr/share/slot/os-profile.json').read_text())
+    except (OSError, ValueError):
+        metadata = {}
+    report = {'schema': 1, 'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+              'clock': 'CLOCK_MONOTONIC', 'boot_type': 'unclassified', 'firmware_s': None,
+              'captured_monotonic_s': time.monotonic(), 'manager': manager, 'units': units,
+              'init_entry_s': float(match[1]) if match else None,
+              'begin_marks': marks(ROOT / 'begins'), 'end_marks': marks(ROOT / 'events'),
+              'frontend_marks': marks(ROOT / 'frontend'),
+              'build': {k: metadata.get(k) for k in ('layer_sha256', 'build_profile', 'sources')},
+              'kernel': os.uname().release,
+              'critical_chain': optional_command(['systemd-analyze', 'critical-chain', 'slot-rg353v.service'])}
+    report['capture_phase'] = 'settled' if int(manager.get('FinishTimestampMonotonic', '0')) else 'shelf_snapshot'
+    report['summary'] = summarize(report)
+    return report
+
+
+def capture():
+    if not (ROOT / 'frontend.displayed').exists():
+        raise RuntimeError('First scene has not been displayed; refusing intrusive capture during startup')
+    # Preserve the visible endpoint before waiting on unrelated background jobs.
+    report = collect_once()
+    store(report)
+    deadline = time.monotonic() + 80
+    while not int(report['manager'].get('FinishTimestampMonotonic', '0')) and time.monotonic() < deadline:
+        time.sleep(1)
+        manager = blocks(command(['systemctl', 'show', '--no-pager', '-p', 'FinishTimestampMonotonic']))[0]
+        if int(manager.get('FinishTimestampMonotonic', '0')):
+            report = collect_once()
+            break
+    try:
+        plot = command(['systemd-analyze', 'plot'], timeout=12)
+    except (RuntimeError, subprocess.TimeoutExpired):
+        plot = ''
+    store(report, plot=plot)
+    print(json.dumps({'boot_id': report['boot_id'], 'first_scene_swap_s': report['summary']['first_scene_swap_s'], 'folder': str(OUTPUT)}))
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('command', choices=['enable', 'disable', 'status', 'capture'])
+    args = p.parse_args()
+    if args.command == 'enable':
+        ENABLED.parent.mkdir(parents=True, exist_ok=True)
+        ENABLED.touch(mode=0o600)
+        print('Enabled for subsequent boots; retains ten reports. Disable when finished.')
+    elif args.command == 'disable':
+        ENABLED.unlink(missing_ok=True)
+        print('Disabled; existing reports retained.')
+    elif args.command == 'status':
+        print(json.dumps({'enabled': ENABLED.exists(), 'folder': str(OUTPUT), 'reports': len(list(OUTPUT.glob('boot-*.json')))}))
+    else:
+        capture()
+
+
+if __name__ == '__main__':
+    main()

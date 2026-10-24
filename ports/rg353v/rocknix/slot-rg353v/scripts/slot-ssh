@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""Slot SSH service, password and physically approved public-key management."""
+import argparse
+import base64
+import contextlib
+import fcntl
+import hashlib
+import ipaddress
+import os
+from pathlib import Path
+import re
+import socket
+import subprocess
+import sys
+import tempfile
+
+class SSHError(Exception):
+    pass
+
+def run(args, data=None):
+    try:
+        return subprocess.run(args, input=data, capture_output=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SSHError('SSH tools unavailable') from error
+
+class Controller:
+    def __init__(self, storage=Path('/storage'), execute=run):
+        self.storage=Path(storage)
+        self.run=execute
+        self.settings=self.storage/'.config/system/configs/system.cfg'
+        self.marker=self.storage/'.cache/services/sshd.conf'
+        self.private=self.storage/'.cache/slot-ssh'
+        self.hashfile=self.private/'password.hash'
+        self.shadow=self.storage/'.cache/shadow'
+        self.keys=self.storage/'.ssh/authorized_keys'
+        self.inbox=self.storage/'slotcontent/Config/SSH'
+
+    @contextlib.contextmanager
+    def locked(self):
+        p=self.storage/'.cache/slot-ssh.lock';p.parent.mkdir(parents=True,exist_ok=True)
+        with p.open('a') as f:
+            fcntl.flock(f,fcntl.LOCK_EX);yield
+
+    @staticmethod
+    def sync(path):
+        fd=os.open(path,os.O_RDONLY)
+        try:os.fsync(fd)
+        finally:os.close(fd)
+
+    def atomic(self,path,data,mode=0o600):
+        path.parent.mkdir(parents=True,exist_ok=True)
+        fd,tmp=tempfile.mkstemp(prefix='.'+path.name+'-',dir=path.parent)
+        try:
+            with os.fdopen(fd,'wb') as f:
+                f.write(data);f.flush();os.fchmod(f.fileno(),mode);os.fsync(f.fileno())
+            os.replace(tmp,path);self.sync(path.parent)
+        finally:
+            if os.path.exists(tmp):os.unlink(tmp)
+
+    def setting(self):
+        if self.storage == Path('/storage') and Path('/usr/share/slot/game-startup-v1').exists():
+            return '1' if Path('/run/slot-services/ssh.on').exists() else '0'
+        return next((l.split('=',1)[1].strip() for l in reversed(self.settings.read_text().splitlines()) if l.startswith('ssh.enabled=')),None)
+
+    def save(self,value):
+        if self.storage == Path('/storage') and Path('/usr/share/slot/game-startup-v1').exists():
+            flag=Path('/run/slot-services/ssh.on');flag.parent.mkdir(parents=True,exist_ok=True)
+            if value == '1':flag.touch(mode=0o600)
+            else:flag.unlink(missing_ok=True)
+            return
+        r=self.run(['/bin/bash','-c','. /etc/profile.d/001-functions && set_setting ssh.enabled "$1" && test "$(get_setting ssh.enabled)" = "$2"','slot-ssh','default' if value is None else value,'' if value is None else value])
+        if r.returncode:raise SSHError('SSH setting failed')
+        self.sync(self.settings);self.sync(self.settings.parent)
+
+    def active(self):
+        return self.run(['systemctl','is-active','sshd.service']).returncode==0
+
+    def service(self,enabled):
+        if enabled and Path('/usr/share/slot/game-startup-v1').exists():
+            if self.run(['/usr/bin/slot-services','prepare','ssh']).returncode:
+                raise SSHError('Turn Wi-Fi or USB networking on before SSH')
+        if self.run(['systemctl','start' if enabled else 'stop','sshd.service']).returncode:raise SSHError('SSH service change failed')
+
+    def set(self,enabled):
+        old=self.setting();marker=self.marker.read_bytes() if self.marker.exists() else None;active=self.active()
+        try:
+            self.save('1' if enabled else '0')
+            # Preserve existing SSH_ARGS in the EnvironmentFile. The file is
+            # also ROCKNIX's boot/start condition, so create only if absent.
+            if enabled and marker is None:
+                saved=self.private/'sshd.env'
+                self.atomic(self.marker,saved.read_bytes() if saved.exists() else b'')
+            self.service(enabled)
+            if self.active()!=enabled:raise SSHError('SSH did not reach requested state')
+            if not enabled:
+                if marker is not None:
+                    self.private.mkdir(parents=True,exist_ok=True);self.private.chmod(0o700)
+                    self.atomic(self.private/'sshd.env',marker)
+                self.marker.unlink(missing_ok=True);self.sync(self.marker.parent)
+        except (SSHError,OSError):
+            self.save(old)
+            if marker is None:self.marker.unlink(missing_ok=True)
+            else:self.atomic(self.marker,marker)
+            self.service(active)
+            raise SSHError('SSH change failed; previous setting restored')
+        return self.status()
+
+    def status(self):
+        enabled=self.setting()=='1';active=self.active();address=''
+        try:
+            with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as s:
+                s.connect(('1.1.1.1',9));address=s.getsockname()[0]
+        except OSError:pass
+        if not address:
+            r=self.run(['ip','-o','-4','addr','show'])
+            for line in r.stdout.decode(errors='replace').splitlines():
+                f=line.split()
+                if 'inet' in f:
+                    ip=ipaddress.ip_interface(f[f.index('inet')+1]).ip
+                    if not ip.is_loopback and not ip.is_link_local:address=str(ip);break
+        count=sum(1 for l in self.keys.read_text().splitlines() if l.strip() and not l.lstrip().startswith('#')) if self.keys.exists() else 0
+        return {'protocol':'1','enabled':str(int(enabled)),'state':('Running' if active else 'Service stopped') if enabled else ('Stopping' if active else 'Off'),'user':'root','password':'Custom' if self.hashfile.is_file() else 'System password','keys':str(count),'address':'ssh root@'+address if address else '--'}
+
+    def restore_password(self):
+        hashed=self.hashfile.read_text().strip()
+        if not re.fullmatch(r'\$6\$[./A-Za-z0-9]{1,16}\$[./A-Za-z0-9]{86}',hashed):raise SSHError('Invalid password hash')
+        text=self.shadow.read_text();lines=text.splitlines();found=0
+        for i,line in enumerate(lines):
+            fields=line.split(':')
+            if fields[0]=='root' and len(fields)==9:
+                fields[1]=hashed;lines[i]=':'.join(fields);found+=1
+        if found!=1:raise SSHError('Root account unavailable')
+        self.atomic(self.shadow,('\n'.join(lines)+'\n').encode(),0o000)
+
+    def install_boot_guard(self):
+        # Older installed images need the same hook that new image builds carry.
+        # The persistent helper/hash are outside the guest-writable Slot share.
+        self.private.mkdir(parents=True,exist_ok=True);self.private.chmod(0o700)
+        self.atomic(self.private/'helper',Path(__file__).read_bytes(),0o700)
+        original=self.run(['cat','/usr/lib/autostart/common/007-rootpw'])
+        if original.returncode:raise SSHError('Password startup hook unavailable')
+        text=original.stdout.decode().replace('/storage/.config/slot-ssh/', '/storage/.cache/slot-ssh/')
+        marker='# Slot SSH: preserve the protected custom password hash.'
+        if marker not in text:
+            if text.count('ROOTPASS=$(get_setting root.password)')!=1:raise SSHError('Password startup changed')
+            text=text.replace('ROOTPASS=$(get_setting root.password)',marker+'\nif [ -s /storage/.cache/slot-ssh/password.hash ]; then\n  exec python3 /storage/.cache/slot-ssh/helper restore-password\nfi\n\nROOTPASS=$(get_setting root.password)')
+        self.atomic(self.private/'rootpw',text.encode(),0o700)
+        unit=b'''[Unit]
+Description=Preserve Slot SSH password before ROCKNIX startup
+RequiresMountsFor=/storage
+Before=rocknix-autostart.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/mount --bind /storage/.cache/slot-ssh/rootpw /usr/lib/autostart/common/007-rootpw
+ExecStop=/bin/umount /usr/lib/autostart/common/007-rootpw
+[Install]
+WantedBy=rocknix.target
+'''
+        path=self.storage/'.config/system.d/slot-ssh-password.service';self.atomic(path,unit,0o644)
+        wants=path.parent/'rocknix.target.wants';wants.mkdir(parents=True,exist_ok=True)
+        link=wants/path.name
+        if not link.exists():link.symlink_to('../'+path.name)
+        self.sync(wants)
+        if self.run(['systemctl','daemon-reload']).returncode or self.run(['systemctl','restart','slot-ssh-password.service']).returncode:raise SSHError('Password startup hook failed')
+
+    def password(self,data):
+        # Secrets travel through stdin only and never enter logs, argv, the
+        # exFAT content share, or ROCKNIX's plaintext root.password setting.
+        try:password=data.decode('utf-8')
+        except UnicodeError:raise SSHError('Invalid password') from None
+        if not 8<=len(data)<=64 or any(c in password for c in '\x00\r\n'):raise SSHError('Use 8 to 64 bytes; no line breaks')
+        self.install_boot_guard()
+        result=self.run(['openssl','passwd','-6','-stdin'],data+b'\n')
+        hashed=result.stdout.strip()
+        if result.returncode or not re.fullmatch(rb'\$6\$[./A-Za-z0-9]{1,16}\$[./A-Za-z0-9]{86}',hashed):raise SSHError('Password hash failed')
+        old_hash=self.hashfile.read_bytes() if self.hashfile.exists() else None
+        old_shadow=self.shadow.read_bytes()
+        try:
+            self.atomic(self.hashfile,hashed+b'\n');self.restore_password()
+        except (SSHError,OSError):
+            if old_hash is None:self.hashfile.unlink(missing_ok=True)
+            else:self.atomic(self.hashfile,old_hash)
+            self.atomic(self.shadow,old_shadow,0o000)
+            raise
+        return self.status()
+
+    def candidates(self):
+        result=[]
+        self.inbox.mkdir(parents=True,exist_ok=True)
+        paths=sorted(self.inbox.glob('*.pub'))
+        if len(paths)>32:raise SSHError('Import at most 32 keys at once')
+        for p in paths:
+            if p.is_symlink() or not p.is_file() or p.stat().st_size>8192:raise SSHError('Invalid public key file')
+            text=p.read_text().strip();fields=text.split()
+            if len(fields)<2 or '\n' in text or fields[0] not in ['ssh-ed25519','ssh-rsa','ecdsa-sha2-nistp256','ecdsa-sha2-nistp384','ecdsa-sha2-nistp521','sk-ssh-ed25519@openssh.com','sk-ecdsa-sha2-nistp256@openssh.com']:raise SSHError('Use OpenSSH public .pub files')
+            try:base64.b64decode(fields[1],validate=True)
+            except ValueError:raise SSHError('Invalid public key') from None
+            # Validate the bytes that will be imported, not a mutable inbox path.
+            checked=self.run(['ssh-keygen','-l','-f','/dev/stdin'],(text+'\n').encode())
+            if checked.returncode:raise SSHError('Invalid public key')
+            result.append((fields[0]+' '+fields[1],checked.stdout.decode().split()[1]))
+        if len(result)>32:raise SSHError('Import at most 32 keys at once')
+        return result
+
+    def preview(self):
+        keys=self.candidates()
+        digest=hashlib.sha256('\n'.join(key for key,_ in keys).encode()).hexdigest()
+        return {'protocol':'1','count':str(len(keys)),'digest':digest,'fingerprint':keys[0][1] if keys else '--'}
+
+    def import_keys(self,expected):
+        preview=self.preview()
+        if not expected or preview['digest']!=expected or preview['count']=='0':raise SSHError('Public keys changed; preview again')
+        candidates=self.candidates()
+        if hashlib.sha256('\n'.join(k for k,_ in candidates).encode()).hexdigest()!=expected:raise SSHError('Public keys changed')
+        self.keys.parent.mkdir(parents=True,exist_ok=True);self.keys.parent.chmod(0o700)
+        if self.keys.is_symlink():raise SSHError('Use a regular authorized_keys file')
+        text=self.keys.read_text() if self.keys.exists() else ''
+        for key,_ in candidates:
+            if not any(key== ' '.join(line.split()[:2]) for line in text.splitlines()):text=text.rstrip('\n')+'\n'+key+'\n'
+        self.atomic(self.keys,text.lstrip('\n').encode())
+        return self.status()
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__);sub=parser.add_subparsers(dest='command',required=True)
+    for name in ['status','preview','restore-password','password']:sub.add_parser(name)
+    p=sub.add_parser('set');p.add_argument('state',choices=['on','off'])
+    p=sub.add_parser('import');p.add_argument('--expected',required=True)
+    args=parser.parse_args();controller=Controller()
+    try:
+        with controller.locked():
+            if args.command=='restore-password':controller.restore_password();return
+            elif args.command=='password':result=controller.password(sys.stdin.buffer.read(65))
+            elif args.command=='set':result=controller.set(args.state=='on')
+            elif args.command=='preview':result=controller.preview()
+            elif args.command=='import':result=controller.import_keys(args.expected)
+            else:result=controller.status()
+        for k,v in result.items():print(k+'\t'+v)
+    except (SSHError,OSError,UnicodeError,ValueError):
+        print('SSH request failed; check the setting or input and retry',file=sys.stderr);raise SystemExit(1)
+
+if __name__=='__main__':main()

@@ -1,0 +1,10 @@
+{
+  "family": [
+    "Open Sans",
+    "Bold"
+  ],
+  "font_sha256": "27da758f4dcac9a65abe914c13b463b42982b9909bc65713424099f4810bd1e6",
+  "text": "slot.",
+  "source": "Official Slot crates/slot-ui/assets/label.ttf (Open Sans Bold)",
+  "tracking_px": -3.4
+}

@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""Read-only, on-demand diagnostics with fixed inputs and bounded commands."""
+import ipaddress
+import json
+import os
+from pathlib import Path
+import re
+import select
+import signal
+import stat
+import subprocess
+import sys
+import time
+
+LIMIT = 256 * 1024
+ROOT = Path('/storage/slotcontent')
+UNITS = ('slot-rg353v', 'NetworkManager', 'slot-wpa-supplicant', 'slot-wifi-probe-recovery',
+         'storage-slotcontent', 'slot-sharing', 'sshd', 'input')
+
+def read(path, limit=LIMIT):
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        with os.fdopen(fd, 'rb') as f:
+            if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+                return ''
+            return f.read(limit).decode('utf-8', 'replace')
+    except OSError:
+        return ''
+
+
+def data(path):
+    try:
+        value = json.loads(read(path))
+        return value if isinstance(value, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def ident(value, maximum=80):
+    value = str(value)
+    return value if re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.+-]{0,' + str(maximum-1) + r'}', value) else 'Unavailable'
+
+
+def command(args, timeout=3, limit=LIMIT):
+    """Cap bytes and elapsed time, including children; never invoke a shell."""
+    try:
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError:
+        return '', False
+    result = bytearray()
+    end = time.monotonic() + timeout
+    complete = False
+    try:
+        while len(result) < limit and time.monotonic() < end:
+            ready, _, _ = select.select([p.stdout], [], [], max(0, end-time.monotonic()))
+            if not ready:
+                break
+            block = os.read(p.stdout.fileno(), min(8192, limit-len(result)))
+            if not block:
+                complete = p.wait(timeout=max(.01, end-time.monotonic())) == 0
+                break
+            result.extend(block)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    finally:
+        if p.poll() is None:
+            try:
+                os.killpg(p.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        p.wait()
+        p.stdout.close()
+    return result.decode('utf-8', 'replace'), complete
+
+
+def number(text, default=None):
+    try:
+        return float(text)
+    except (ValueError, TypeError):
+        return default
+
+
+def memory():
+    values = {}
+    for line in read('/proc/meminfo').splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] in ('MemTotal:', 'MemAvailable:'):
+            values[parts[0][:-1]] = int(parts[1]) * 1024
+    return values
+
+
+def storage(path):
+    try:
+        s = os.statvfs(path)
+        return {'available': s.f_bavail*s.f_frsize, 'total': s.f_blocks*s.f_frsize}
+    except OSError:
+        return {}
+
+
+def storage_details():
+    values = {'fault_path': 'None recorded this boot', 'fault_operation': '-', 'fault_errno': '-', 'fault_reason': '-', 'fault_time': '-', 'content_mount': 'Unavailable', 'fs_error': 'None recorded'}
+    for line in read('/run/slot-storage-error', 4096).splitlines():
+        key, sep, value = line.partition('\t')
+        if sep and key.startswith('fault_') and key in values:
+            values[key] = value[:512]
+    for line in read('/proc/mounts', 65536).splitlines():
+        fields = line.split()
+        if len(fields)>=4 and fields[1]==str(ROOT):
+            values['content_mount'] = fields[0]+' '+fields[2]+' '+('read-only' if 'ro' in fields[3].split(',') else 'read/write')
+    logs, ok = command(['dmesg', '--color=never'], timeout=2, limit=LIMIT)
+    errors=[line for line in logs.splitlines() if re.search(r'(exfat|fat-fs|ext4-fs|mmc).*?(error|corrupt|fail|read-only|timeout|timed out)',line,re.I)]
+    values['fs_error'] = errors[-1][:160] if errors else ('None recorded' if ok else 'Kernel log unavailable')
+    return values
+
+
+def snapshot(system):
+    manifest = data(system / 'build-manifest.json')
+    manager = data('/storage/slot-manager/state.json')
+    active = data('/storage/slot-os-updates/state.json')
+    if not manifest:
+        manifest = data('/usr/share/slot/System/build-manifest.json')
+    temps = []
+    for path in sorted(Path('/sys/class/thermal').glob('thermal_zone*/temp'))[:8]:
+        v = number(read(path, 64))
+        if v is not None and -20000 <= v <= 150000:
+            temps.append(round(v/1000, 1))
+    ips, ok = command(['ip', '-o', '-4', 'addr', 'show', 'scope', 'global'], limit=8192)
+    addresses = []
+    for value in re.findall(r'inet ([0-9.]+)/', ips):
+        try:
+            addresses.append(str(ipaddress.IPv4Address(value)))
+        except ValueError:
+            pass
+    units = {}
+    output, services_ok = command(['systemctl', 'show', '--property=Id,ActiveState,SubState'] + [u+'.service' for u in UNITS], limit=16384)
+    for block in output.strip().split('\n\n'):
+        pairs = dict(line.split('=', 1) for line in block.splitlines() if '=' in line)
+        name = pairs.get('Id', '').removesuffix('.service')
+        if name in UNITS:
+            units[name] = {k: ident(pairs.get(k, 'Unavailable')) for k in ('ActiveState', 'SubState')}
+    failed, failed_ok = command(['systemctl', 'list-units', '--failed', '--no-legend', '--plain', '--no-pager'], limit=8192)
+    failed_units = [ident(line.split()[0]) for line in failed.splitlines() if line.split()][:32]
+    profile = data('/usr/share/slot/os-profile.json')
+    return {'slot': ident(manager.get('current', 'Factory')),
+            'os': ident(active.get('transaction', 'Factory')), 'kernel': ident(os.uname().release),
+            'profile': ident(profile.get('build_profile', 'Unavailable')),
+            'sources': {k: ident(v.get('commit', 'Unavailable')) for k, v in manifest.get('sources', {}).items() if k in ('slot', 'rocknix') and isinstance(v, dict)},
+            'layer': ident(manifest.get('layer_sha256', 'Unavailable')),
+            'memory_bytes': memory(), 'storage_bytes': {'content': storage(ROOT)},
+            'temperatures_c': temps, 'ipv4': addresses[:4], 'services': units,
+            'failed_units': failed_units,
+            'collection': {'network': ok, 'services': services_ok, 'failed_units': failed_ok}}
+
+
+def ui(report):
+    def gib(value):
+        return f'{value/1024**3:.1f} GiB' if isinstance(value, (float, int)) else 'Unavailable'
+    values = {'protocol': '1', 'slot': report['slot'], 'os': report['os'], 'kernel': report['kernel'], 'profile': report['profile'],
+              'source_slot': report['sources'].get('slot', 'Unavailable')[:12], 'source_os': report['sources'].get('rocknix', 'Unavailable')[:12],
+              'layer': report['layer'][:12], 'ip': ', '.join(report['ipv4']) or 'Not connected',
+              'ram': gib(report['memory_bytes'].get('MemAvailable')), 'free': gib(report['storage_bytes']['content'].get('available')),
+              'temperature': f"{max(report['temperatures_c']):.1f} C" if report['temperatures_c'] else 'Unavailable',
+              'failed': str(len(report['failed_units'])) if report['collection']['failed_units'] else 'Unavailable'}
+    for name in UNITS:
+        values[name] = report['services'].get(name, {}).get('ActiveState', 'Unavailable')
+    values.update(report.get("storage_details", {}))
+    for key, value in values.items():
+        print(key+'\t'+str(value).replace('\t', ' ').replace('\n', ' ')[:160])
+
+
+def main():
+    if sys.argv[1:] not in (['status'], ['status', '--storage']):
+        raise SystemExit(2)
+    system = Path(__file__).resolve().parent
+    report = snapshot(system)
+    if sys.argv[1:]==["status", "--storage"]: report["storage_details"]=storage_details()
+    ui(report)
+
+
+if __name__ == '__main__':
+    main()

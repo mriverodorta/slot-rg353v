@@ -1,0 +1,15 @@
+[Unit]
+Description=RG353V Wi-Fi authentication
+RequiresMountsFor=/storage
+Requires=dbus.service
+After=dbus.service
+Before=NetworkManager.service
+
+[Service]
+Type=dbus
+BusName=fi.w1.wpa_supplicant1
+ExecStart=/usr/lib/slot/wpa_supplicant -u -s -O /run/wpa_supplicant
+Restart=on-failure
+
+[Install]
+WantedBy=rocknix.target

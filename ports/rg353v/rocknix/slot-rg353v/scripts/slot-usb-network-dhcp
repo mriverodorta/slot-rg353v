@@ -1,0 +1,3 @@
+#!/bin/sh
+# BusyBox supplies the event and DHCP fields; Python validates all addresses.
+exec /usr/bin/slot-usb-network dhcp "$1"

@@ -1,0 +1,3 @@
+/* Generated from config/boot-plan.json. */
+static const char *steps[]={"init-load_modules","init-recovery_mode","init-check_disks","init-mount_flash","init-set_consolefont","init-cleanup_flash","init-update_bootmenu","init-mount_sysroot","init-mount_storage","init-load_splash","init-check_update","init-prepare_sysroot","service-modules","service-devices","service-storage","service-settings","service-hardware","service-content","service-os-check","frontend-start","frontend-surface","frontend-compositor","frontend-platform","frontend-audio","frontend-frontend","frontend-faces","frontend-bezel","frontend-input","frontend-ready"};
+#define STEP_COUNT (sizeof(steps)/sizeof(steps[0]))

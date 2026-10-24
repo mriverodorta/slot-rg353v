@@ -1,0 +1,10 @@
+--- a/src/gb/overrides.c
++++ b/src/gb/overrides.c
+@@ -751,6 +751,7 @@
+ 	{ "SGB 4-F", SGB_PAL(4F), },
+ 	{ "SGB 4-G", SGB_PAL(4G), },
+ 	{ "SGB 4-H", SGB_PAL(4H), },
++	{ "Perfect DMG", { 0xFF75DA76, 0xFF289F8C, 0xFF066D8C, 0xFF003E85, 0xFF75DA76, 0xFF289F8C, 0xFF066D8C, 0xFF003E85, 0xFF75DA76, 0xFF289F8C, 0xFF066D8C, 0xFF003E85 }, },
+ };
+ 
+ bool GBOverrideColorFind(struct GBCartridgeOverride* override, enum GBColorLookup order) {

@@ -1,0 +1,224 @@
+{
+  "schema": 1,
+  "clock": "Linux CLOCK_MONOTONIC, seconds since kernel entry",
+  "capture_date": "2026-10-23",
+  "device": "RG353V",
+  "boot_kind": "controlled warm restart with temporary presentation probes",
+  "first_scene_mark_s": 4.664392917,
+  "shelf_swap_s": 4.663908167,
+  "complete_frame_s": 4.629176792,
+  "shelf_hold_ms": 800,
+  "counter": {
+    "total": 29,
+    "init": 12,
+    "services": 7,
+    "frontend": 10,
+    "formula": "floor(100 * completed / 29)"
+  },
+  "events": [
+    {
+      "at_s": 0.0,
+      "view": "black",
+      "source": "timeline-origin"
+    },
+    {
+      "at_s": 1.151899082,
+      "view": "splash",
+      "percent": 0,
+      "source": "init-first-frame"
+    },
+    {
+      "at_s": 1.506611541,
+      "view": "splash",
+      "percent": 31,
+      "source": "init-second-draw-completion-bound"
+    },
+    {
+      "at_s": 2.494290833,
+      "view": "splash",
+      "percent": 41,
+      "source": "framebuffer-write"
+    },
+    {
+      "at_s": 2.577189208,
+      "view": "splash",
+      "percent": 48,
+      "source": "framebuffer-write"
+    },
+    {
+      "at_s": 2.661599583,
+      "view": "splash",
+      "percent": 51,
+      "source": "framebuffer-write"
+    },
+    {
+      "at_s": 3.1610035,
+      "view": "splash",
+      "percent": 55,
+      "source": "framebuffer-write"
+    },
+    {
+      "at_s": 3.330359167,
+      "view": "splash",
+      "percent": 62,
+      "source": "framebuffer-write"
+    },
+    {
+      "at_s": 3.665658584,
+      "view": "splash",
+      "percent": 65,
+      "source": "framebuffer-write"
+    },
+    {
+      "at_s": 3.978957584,
+      "view": "splash",
+      "percent": 68,
+      "source": "framebuffer-write"
+    },
+    {
+      "at_s": 4.218635251,
+      "view": "splash",
+      "percent": 72,
+      "source": "framebuffer-write"
+    },
+    {
+      "at_s": 4.265192542,
+      "view": "black",
+      "source": "gles-swap"
+    },
+    {
+      "at_s": 4.304403917,
+      "view": "splash",
+      "source": "gles-swap",
+      "percent": 72
+    },
+    {
+      "at_s": 4.400800042,
+      "view": "splash",
+      "source": "gles-swap",
+      "percent": 75
+    },
+    {
+      "at_s": 4.594156959,
+      "view": "splash",
+      "source": "gles-swap",
+      "percent": 86
+    },
+    {
+      "at_s": 4.629176792,
+      "view": "splash",
+      "source": "gles-swap",
+      "percent": 100
+    },
+    {
+      "at_s": 4.663908167,
+      "view": "shelf",
+      "source": "gles-swap"
+    }
+  ],
+  "gles_samples": [
+    {
+      "frame": 0,
+      "before_swap_s": 4.264900292,
+      "after_swap_s": 4.265192542,
+      "ok": 1,
+      "percent": null,
+      "mean_absolute_error": 21.376041666666666,
+      "crop_sha256": "59ec91dcb7dc65b5f928091cb0e25c26729a0a4453ebe7d8244fc1ceae7d9712"
+    },
+    {
+      "frame": 1,
+      "before_swap_s": 4.304087167,
+      "after_swap_s": 4.304403917,
+      "ok": 1,
+      "percent": 72,
+      "mean_absolute_error": 0.0,
+      "crop_sha256": "c7117208f7fcbc4f0fa429eb7ab0da26461b7ab3a5a940534d8c1dde86005acd"
+    },
+    {
+      "frame": 2,
+      "before_swap_s": 4.312758709,
+      "after_swap_s": 4.313096459,
+      "ok": 1,
+      "percent": 72,
+      "mean_absolute_error": 0.0,
+      "crop_sha256": "c7117208f7fcbc4f0fa429eb7ab0da26461b7ab3a5a940534d8c1dde86005acd"
+    },
+    {
+      "frame": 3,
+      "before_swap_s": 4.400709917,
+      "after_swap_s": 4.400800042,
+      "ok": 1,
+      "percent": 75,
+      "mean_absolute_error": 0.0,
+      "crop_sha256": "6749a4622d90cbc45d24db233a78a4feca2f7227bac2ffa7afcf19fcca9df537"
+    },
+    {
+      "frame": 4,
+      "before_swap_s": 4.594060126,
+      "after_swap_s": 4.594156959,
+      "ok": 1,
+      "percent": 86,
+      "mean_absolute_error": 0.0,
+      "crop_sha256": "fe7dbe99457f59700aff7aa7e18ff5435199ba91b1bb7d28915fd39ce071c17a"
+    },
+    {
+      "frame": 5,
+      "before_swap_s": 4.598275876,
+      "after_swap_s": 4.598450001,
+      "ok": 1,
+      "percent": 86,
+      "mean_absolute_error": 0.0,
+      "crop_sha256": "fe7dbe99457f59700aff7aa7e18ff5435199ba91b1bb7d28915fd39ce071c17a"
+    },
+    {
+      "frame": 6,
+      "before_swap_s": 4.612329834,
+      "after_swap_s": 4.612463709,
+      "ok": 1,
+      "percent": 86,
+      "mean_absolute_error": 0.0,
+      "crop_sha256": "fe7dbe99457f59700aff7aa7e18ff5435199ba91b1bb7d28915fd39ce071c17a"
+    },
+    {
+      "frame": 7,
+      "before_swap_s": 4.628997126,
+      "after_swap_s": 4.629176792,
+      "ok": 1,
+      "percent": 100,
+      "mean_absolute_error": 0.0026041666666666665,
+      "crop_sha256": "f56d3bc08043ba7fd17de8d1f70b41fefa26d4a9d5c65d8b33d970853062940f"
+    },
+    {
+      "frame": 8,
+      "before_swap_s": 4.663670751,
+      "after_swap_s": 4.663908167,
+      "ok": 1,
+      "percent": null,
+      "mean_absolute_error": 67.40052083333333,
+      "crop_sha256": "c8c209868b3431c8ae3b8d2c5a23aa31d6bacf811911eebd3b8cd7396f635a43"
+    }
+  ],
+  "init_second_draw_interval_s": [
+    1.469172041,
+    1.506611541
+  ],
+  "limits": [
+    "Presentation probes add work; this run is not an uninstrumented performance benchmark.",
+    "Swap return/framebuffer write timestamps are software endpoints, not optical panel measurements.",
+    "The initial 31% draw is bounded by its measured begin/end; replay uses the completion bound.",
+    "Before the first captured GLES swap, framebuffer ownership transitions are not optically measured.",
+    "Images are reconstructed with the current renderer and guide shelf; this is a timing replay, not full-frame video capture.",
+    "GIF boundaries are rounded to 10 ms; MP4 is sampled at 60 fps. No stage is stretched to force a chosen boot duration."
+  ],
+  "source": {
+    "slot_revision": "868631d7b131540df87c8e3295638e27445cdba2",
+    "frontend_component": "slot-r22-sd-scan",
+    "os_component": "os-r20-portable-progress",
+    "files": {
+      "ports/rg353v/rocknix/slot-bootsplash/config/boot-plan.json": "8a258a6dfb97494f505f4132602a54eca4e48676f0e38983ec31641ee3930516",
+      "ports/rg353v/rocknix/slot-bootsplash/src/slot-splash.c": "26da2830f7b267e2f67bd3ac2323efa683a61345168743d09588fb5096ba3533",
+      "ports/rg353v/rocknix/slot-bootsplash/src/plan.h": "088d78f56ffeb2e97a3707c1e533de6843dafafb23a73c66a35530ba5ee32791"
+    }
+  }
+}

@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Retire installer staging after the first healthy SD or internal shelf."""
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import uuid
+
+
+def retire(storage, installed, mounts, device_type):
+    storage = Path(storage)
+    marker = storage / '.slot-module-install-complete.json'
+    if storage.is_symlink() or marker.is_symlink():
+        raise ValueError('Unsafe installer receipt')
+    if not marker.is_file():
+        return False
+    boot = mounts.get('/flash', '')
+    match = re.fullmatch(r'/dev/(mmcblk\d+)p1', boot)
+    if (not match or mounts.get('/storage') != '/dev/' + match[1] + 'p2'
+            or mounts.get('/storage/slotcontent') != '/dev/' + match[1] + 'p3'):
+        raise ValueError('Installer cleanup requires boot, system and content on the same disk')
+    if device_type not in ('SD', 'MMC'):
+        raise ValueError('Unsupported installer cleanup device')
+    layout = json.loads((storage / '.slot-clean-layout.json').read_text())
+    result = json.loads(marker.read_text())
+    if (layout.get('phase') != 'complete' or result['selected'] != installed['selected']
+            or result['kit'] != installed['kit']):
+        raise ValueError('Unconfirmed module installation')
+    if device_type == 'MMC':
+        # The modular internal transaction records its independent SD origin.
+        uuid.UUID(layout['installed_from_sd'])
+    paths = [storage / name for name in ('.slot-modules', '.slot-module-install', '.slot-clean-install')]
+    for path in paths:
+        if path.is_symlink() or (path.exists() and not path.is_dir()):
+            raise ValueError('Unsafe installer cleanup path')
+    for path in paths:
+        if path.exists():
+            shutil.rmtree(path)
+    marker.rename(storage / '.slot-modules-installed.json')
+    fd = os.open(storage, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    return True
+
+
+def main():
+    storage = Path('/storage')
+    if (not (storage / '.slot-module-install-complete.json').exists()
+            or not Path('/run/slot-boot/frontend/first-frame').exists()):
+        return
+    mounts = {s.split()[1]: s.split()[0] for s in Path('/proc/mounts').read_text().splitlines()}
+    match = re.fullmatch(r'/dev/(mmcblk\d+)p1', mounts.get('/flash', ''))
+    if not match:
+        raise ValueError('Unexpected installer boot disk')
+    kind = (Path('/sys/class/block') / match[1] / 'device/type').read_text().strip()
+    installed = json.loads(Path('/usr/share/slot/modules-v1.json').read_text())
+    retire(storage, installed, mounts, kind)
+
+
+if __name__ == '__main__':
+    main()

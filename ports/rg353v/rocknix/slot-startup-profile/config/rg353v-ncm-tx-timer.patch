@@ -1,0 +1,35 @@
+From: Cosmin Tanislav <cosmin-gabriel.tanislav.xa@renesas.com>
+Subject: [PATCH] usb: gadget: f_ncm: restart the TX timer if the TX freelist is empty
+
+Retry the timer flush when u_ether temporarily has no TX requests. Otherwise
+an incompletely filled NTB can remain pending indefinitely, including TCP
+retransmissions and unrelated SSH traffic, until more traffic fills it.
+
+Source: https://lore.kernel.org/r/20260817192638.437798-1-cosmin-gabriel.tanislav.xa@renesas.com
+Archive: https://lists.openwall.net/linux-kernel/2026/08/17/1825
+Fixes: 6d3865f9d41f ("usb: gadget: NCM: Add transmit multi-frame.")
+Signed-off-by: Cosmin Tanislav <cosmin-gabriel.tanislav.xa@renesas.com>
+
+--- a/drivers/usb/gadget/function/f_ncm.c
++++ b/drivers/usb/gadget/function/f_ncm.c
+@@ -1148,6 +1148,7 @@ static enum hrtimer_restart ncm_tx_timeout(struct hrtimer *data)
+ {
+ 	struct f_ncm *ncm = container_of(data, struct f_ncm, task_timer);
+ 	struct net_device *netdev = READ_ONCE(ncm->netdev);
++	netdev_tx_t ret;
+ 
+ 	if (netdev) {
+ 		/* XXX This allowance of a NULL skb argument to ndo_start_xmit
+@@ -1158,7 +1159,11 @@ static enum hrtimer_restart ncm_tx_timeout(struct hrtimer *data)
+ 		 *
+ 		 * This will call directly into u_ether's eth_start_xmit()
+ 		 */
+-		netdev->netdev_ops->ndo_start_xmit(NULL, netdev);
++		ret = netdev->netdev_ops->ndo_start_xmit(NULL, netdev);
++		if (ret == NETDEV_TX_BUSY) {
++			hrtimer_forward_now(data, TX_TIMEOUT_NSECS);
++			return HRTIMER_RESTART;
++		}
+ 	}
+ 	return HRTIMER_NORESTART;
+ }

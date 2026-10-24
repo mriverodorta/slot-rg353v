@@ -1,0 +1,9 @@
+[Unit]
+Description=Save experimental bootloader report after the first Slot frame
+
+[Path]
+PathExists=/run/slot-boot/frontend.displayed
+Unit=slot-bootstage-report.service
+
+[Install]
+WantedBy=multi-user.target

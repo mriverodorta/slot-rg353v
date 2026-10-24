@@ -1,0 +1,394 @@
+#!/usr/bin/env python3
+"""Opt-in RG353V USB Ethernet, with optional computer-provided Internet."""
+import argparse
+import contextlib
+import fcntl
+import hashlib
+import ipaddress
+import json
+import os
+from pathlib import Path
+import re
+import tempfile
+import subprocess
+import sys
+
+ADDRESS = '172.31.53.1'
+PEER = '172.31.53.2'
+PREFIX = 30
+IPV6 = 'fe80::353:1'
+UDC_NAME = 'fcc00000.usb'
+FUNCTION = 'ncm.slot'
+FUNCTIONS = ('ncm.slot', 'ecm.slot')
+ROUTE_METRIC = '600'
+DHCP_HOOK = '/usr/bin/slot-usb-network-dhcp'
+
+
+class NetworkError(Exception):
+    pass
+
+
+def execute(args):
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise NetworkError('USB network request did not finish') from error
+
+
+class Controller:
+    def __init__(self, storage=Path('/storage'), runtime=Path('/run'), sysroot=Path('/sys'), run=execute):
+        self.storage = Path(storage)
+        self.runtime = Path(runtime)
+        self.sys = Path(sysroot)
+        self.root = self.sys / 'kernel/config/usb_gadget'
+        self.gadget = self.root / 'slot-network'
+        self.udc = self.sys / 'class/udc' / UDC_NAME
+        self.work = self.runtime / 'slot-usb-network'
+        self.run = run
+        self.preferences = self.storage / '.config/slot/usb-network.json'
+        self.resolver = self.runtime / 'rocknix/resolv.conf'
+
+    def call(self, *args, required=True):
+        result = self.run(list(args))
+        if required and result.returncode:
+            raise NetworkError('USB network: ' + Path(args[0]).name + ' failed: ' + result.stderr.strip()[:160])
+        return result
+
+    @staticmethod
+    def require(ok, message):
+        if not ok:
+            raise NetworkError(message)
+
+    @staticmethod
+    def write(path, value):
+        # Never rename configfs attributes: the kernel owns these files.
+        path.write_text(value + '\n')
+
+    @contextlib.contextmanager
+    def locked(self):
+        # The storage service owns this lock throughout the entire file handoff.
+        lock = self.storage / '.cache/slot-usb/lock'
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        with lock.open('a') as stream:
+            try:
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise NetworkError('Finish USB storage first') from None
+            yield
+
+    @staticmethod
+    def atomic(path, text, mode=0o600):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, name = tempfile.mkstemp(prefix='.' + path.name, dir=path.parent)
+        try:
+            with os.fdopen(fd, 'w') as stream:
+                os.fchmod(stream.fileno(), mode)
+                stream.write(text)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(name, path)
+        finally:
+            if os.path.exists(name):os.unlink(name)
+
+    def options(self):
+        try:
+            data = json.loads(self.preferences.read_text())
+            self.require(isinstance(data, dict) and set(data) == {'legacy', 'internet'}
+                         and all(type(v) is bool for v in data.values()), 'USB settings invalid')
+            return data
+        except FileNotFoundError:
+            return {'legacy': False, 'internet': False}
+        except (ValueError, TypeError):
+            raise NetworkError('USB settings invalid') from None
+
+    def state(self):
+        try:return json.loads((self.work / 'state.json').read_text())
+        except FileNotFoundError:return {}
+
+    def save_state(self, state):
+        self.atomic(self.work / 'state.json', json.dumps(state) + '\n')
+
+    def configure(self, feature, on):
+        self.require(feature in ('legacy', 'internet'), 'Unknown USB setting')
+        # Do not hold the storage handoff lock across a systemd restart: the
+        # service's setup/cleanup takes it in its own process.
+        self.work.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with (self.work / 'preferences.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            old = self.options()
+            if old[feature] == on:return
+            enabled = (self.work / 'active').exists()
+            remote = [feature for feature in ('ssh', 'sharing')
+                      if (self.runtime / 'slot-services' / (feature + '.on')).exists()]
+            def restore_remote():
+                for feature in remote:
+                    self.call('/usr/bin/slot-' + feature, 'set', 'on')
+            new = dict(old);new[feature] = on
+            self.atomic(self.preferences, json.dumps(new) + '\n')
+            if enabled:
+                try:
+                    self.call('systemctl', 'restart', 'slot-usb-network.service')
+                    restore_remote()
+                except NetworkError:
+                    self.atomic(self.preferences, json.dumps(old) + '\n')
+                    restored = self.call('systemctl', 'restart', 'slot-usb-network.service', required=False)
+                    if restored.returncode == 0:restore_remote()
+                    raise
+
+    def preflight(self):
+        self.require(self.udc.is_dir(), 'USB controller unavailable')
+        self.require(not (self.runtime / 'slot-usb/active').exists(), 'Finish USB storage first')
+        self.require(not self.gadget.exists(), 'USB networking needs cleanup; turn it Off first')
+        for bound in self.root.glob('*/UDC'):
+            self.require(not bound.read_text().strip(), 'Another USB mode is active')
+        # Internet mode gets its subnet from the computer, without a DHCP server.
+        if self.options()['internet']:return
+        # Do not route a home/office subnet into the cable by accident.
+        subnet = ipaddress.ip_network(ADDRESS + '/' + str(PREFIX), strict=False)
+        output = self.call('ip', '-o', '-f', 'inet', 'addr', 'show').stdout
+        for line in output.splitlines():
+            match = re.search(r'\binet\s+(\S+)', line)
+            if match:
+                self.require(not subnet.overlaps(ipaddress.ip_interface(match[1]).network),
+                             'USB address overlaps an existing network')
+
+    def identity(self):
+        serial = (self.storage / '.cache/systemd-machine-id').read_text().strip()
+        self.require(bool(re.fullmatch(r'[0-9a-fA-F]{32}', serial)), 'USB identity unavailable')
+        suffix = hashlib.sha256(('slot-usb-network:' + serial).encode()).digest()[:5]
+        return serial + '-net', ':'.join(f'{b:02x}' for b in bytes([2]) + suffix), ':'.join(f'{b:02x}' for b in bytes([6]) + suffix)
+
+    def setup(self):
+        self.preflight()
+        options = self.options()
+        function_name = 'ecm.slot' if options['legacy'] else 'ncm.slot'
+        serial, device_mac, host_mac = self.identity()
+        self.work.mkdir(mode=0o700, parents=True, exist_ok=True)
+        self.work.chmod(0o700)
+        (self.work / 'active').touch(mode=0o600)
+        self.gadget.mkdir()
+        for key, value in [('idVendor', '0x1d6b'), ('idProduct', '0x0104'),
+                           ('bcdUSB', '0x0200'), ('bcdDevice', '0x0300' if options['legacy'] else '0x0301'),
+                           ('bDeviceClass', '0x02' if options['legacy'] else '0xef'),
+                           ('bDeviceSubClass', '0x00' if options['legacy'] else '0x02'),
+                           ('bDeviceProtocol', '0x00' if options['legacy'] else '0x01'), ('max_speed', 'high-speed')]:
+            self.write(self.gadget / key, value)
+        strings = self.gadget / 'strings/0x409'
+        strings.mkdir()
+        for key, value in [('serialnumber', serial), ('manufacturer', 'Slot'), ('product', 'Slot RG353V Network')]:
+            self.write(strings / key, value)
+        config = self.gadget / 'configs/c.1'
+        config.mkdir()
+        (config / 'strings/0x409').mkdir()
+        self.write(config / 'strings/0x409/configuration', 'Slot USB Ethernet')
+        self.write(config / 'MaxPower', '250')
+        function = self.gadget / 'functions' / function_name
+        function.mkdir()
+        for key, value in [('dev_addr', device_mac), ('host_addr', host_mac), ('ifname', 'slotusb%d')]:
+            self.write(function / key, value)
+        (config / function_name).symlink_to(function)
+        self.write(self.gadget / 'UDC', UDC_NAME)
+        interface = (function / 'ifname').read_text().strip()
+        self.require(bool(re.fullmatch(r'slotusb[0-9]{1,3}', interface)), 'USB interface unavailable')
+        state = {'interface': interface, 'function': function_name, **options}
+        self.save_state(state)
+        # This is an IPv4 Internet client; keep IPv6 link-local only in both modes.
+        self.call('sysctl', '-q', '-w', 'net.ipv6.conf.' + interface + '.accept_ra=0',
+                  'net.ipv6.conf.' + interface + '.autoconf=0')
+        self.call('ip', 'link', 'set', 'dev', interface, 'up')
+        self.call('ip', '-f', 'inet6', 'address', 'add', IPV6 + '/64', 'dev', interface)
+        if options['internet']:
+            # Prepare HTTPS certificates only for this explicit online mode.
+            self.call('systemctl', 'start', 'openssl-config.service')
+        else:
+            self.call('ip', 'address', 'add', ADDRESS + '/' + str(PREFIX), 'dev', interface)
+            # No router/DNS is advertised to the computer in direct-link mode.
+            config_text = '\n'.join([
+                'start ' + PEER, 'end ' + PEER, 'interface ' + interface,
+                'max_leases 1', 'auto_time 0', 'option subnet 255.255.255.252',
+                'option lease 86400', 'pidfile ' + str(self.work / 'udhcpd.pid'),
+                'lease_file ' + str(self.work / 'leases'), '',
+            ])
+            self.atomic(self.work / 'udhcpd.conf', config_text)
+            (self.work / 'leases').touch(mode=0o600)
+        self.call('/usr/bin/slot-services', 'usb', 'on')
+
+    def serve(self):
+        state = self.state()
+        self.require(state.get('interface') == 'slotusb0', 'USB interface unavailable')
+        if state.get('internet'):
+            args = ['/usr/sbin/udhcpc', '-f', '-R', '-B', '-i', state['interface'],
+                    '-p', str(self.work / 'udhcpc.pid'), '-s', DHCP_HOOK,
+                    '-t', '3', '-T', '3', '-A', '10']
+        else:
+            args = ['/usr/sbin/udhcpd', '-f', str(self.work / 'udhcpd.conf')]
+        os.execv(args[0], args)
+
+    def restore_dns(self, state):
+        owned = state.pop('dns_written', None)
+        if owned is not None:
+            # Preserve any replacement made by Wi-Fi or another administrator.
+            try:current = self.resolver.read_text()
+            except FileNotFoundError:current = None
+            if current == owned:
+                original = state.get('dns_original')
+                link = state.get('dns_original_link')
+                if link is not None:
+                    self.resolver.unlink()
+                    self.resolver.symlink_to(link)
+                elif original is None:self.resolver.unlink(missing_ok=True)
+                else:self.atomic(self.resolver, original, state.get('dns_original_mode', 0o644))
+        state.pop('dns_original', None)
+        state.pop('dns_original_link', None)
+        state.pop('dns_original_mode', None)
+
+    def deconfigure_lease(self, state):
+        interface = state.get('interface')
+        if interface != 'slotusb0':return
+        if state.get('gateway'):
+            self.call('ip', 'route', 'del', 'default', 'dev', interface,
+                      'metric', ROUTE_METRIC, required=False)
+        lease = state.pop('lease', None)
+        if lease:
+            self.call('ip', 'address', 'del', lease, 'dev', interface, required=False)
+        self.restore_dns(state)
+        state.pop('gateway', None)
+
+    def dhcp(self, event, env):
+        if event not in ('bound', 'renew', 'deconfig', 'nak', 'leasefail'):return
+        with (self.work / 'dhcp.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            state = self.state()
+            self.require(state.get('internet') and state.get('interface') == 'slotusb0'
+                         and env.get('interface') == 'slotusb0', 'Unexpected DHCP interface')
+            if event == 'leasefail':return
+            if event in ('deconfig', 'nak'):
+                self.deconfigure_lease(state);self.save_state(state);return
+            # DHCP data is parsed as addresses, never executed as shell text.
+            try:
+                address = ipaddress.IPv4Interface(env['ip'] + '/' + env['subnet'])
+                gateways = [ipaddress.IPv4Address(x) for x in env.get('router', '').split()]
+                dns = [ipaddress.IPv4Address(x) for x in env.get('dns', '').split()][:3]
+                self.require(1 <= address.network.prefixlen <= 30 and not address.ip.is_unspecified
+                             and not address.ip.is_loopback and not address.ip.is_multicast
+                             and address.ip not in (address.network.network_address, address.network.broadcast_address),
+                             'Invalid USB lease')
+                valid = lambda ip: not (ip.is_unspecified or ip.is_multicast or ip.is_loopback)
+                self.require(bool(gateways) and all(valid(x) and x in address.network
+                             and x != address.ip and x not in (address.network.network_address, address.network.broadcast_address)
+                             for x in gateways) and bool(dns) and all(valid(x) for x in dns),
+                             'Computer did not supply a usable gateway and DNS')
+            except (KeyError, ValueError):
+                raise NetworkError('Invalid USB DHCP lease') from None
+            # A shared network must not collide with an existing Wi-Fi subnet.
+            addresses = self.call('ip', '-o', '-f', 'inet', 'addr', 'show').stdout
+            for line in addresses.splitlines():
+                match = re.search(r'^\d+:\s+(\S+).*?\binet\s+(\S+)', line)
+                if match and match[1].split('@')[0] != 'slotusb0':
+                    network = ipaddress.ip_interface(match[2]).network
+                    self.require(not address.network.overlaps(network), 'Shared USB network overlaps another interface')
+            self.deconfigure_lease(state)
+            try:
+                try:
+                    original = self.resolver.read_text()
+                    original_mode = self.resolver.stat().st_mode & 0o777
+                except FileNotFoundError:original = None;original_mode = 0o644
+                state['lease'] = str(address)
+                state['gateway'] = str(gateways[0])
+                state['dns_original_link'] = os.readlink(self.resolver) if self.resolver.is_symlink() else None
+                state['dns_original_mode'] = original_mode
+                state['dns_original'] = original
+                state['dns_written'] = '# Slot USB Internet\n' + ''.join('nameserver ' + str(x) + '\n' for x in dns)
+                # Journal ownership before changing the interface or resolver.
+                # ExecStopPost can recover if systemd stops a DHCP hook midway.
+                self.save_state(state)
+                self.call('ip', 'address', 'add', state['lease'], 'dev', 'slotusb0')
+                self.call('ip', 'route', 'add', 'default', 'via', state['gateway'],
+                          'dev', 'slotusb0', 'metric', ROUTE_METRIC)
+                self.atomic(self.resolver, state['dns_written'], 0o644)
+            except BaseException:
+                self.deconfigure_lease(state);self.save_state(state);raise
+
+    def cleanup(self):
+        if not self.gadget.exists() and not (self.work / 'active').exists():
+            return
+        with (self.work / 'dhcp.lock').open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            state = self.state()
+            self.deconfigure_lease(state)
+        # Revoke the grant first, before an interface can disappear. Existing
+        # Wi-Fi sessions keep their independently enabled SSH/sharing services.
+        self.call('/usr/bin/slot-services', 'usb', 'off')
+        if self.gadget.exists():
+            udc = self.gadget / 'UDC'
+            if udc.read_text().strip():
+                self.write(udc, '')
+            for function in FUNCTIONS:
+                (self.gadget / 'configs/c.1' / function).unlink(missing_ok=True)
+                path = self.gadget / 'functions' / function
+                if path.exists():path.rmdir()
+            for name in ['configs/c.1/strings/0x409', 'configs/c.1', 'strings/0x409']:
+                path = self.gadget / name
+                if path.exists():
+                    path.rmdir()
+            self.gadget.rmdir()
+        (self.work / 'active').unlink(missing_ok=True)
+        for name in ['udhcpd.pid', 'udhcpc.pid', 'udhcpd.conf', 'leases', 'state.json']:
+            (self.work / name).unlink(missing_ok=True)
+
+    def status(self):
+        try:
+            bound = (self.gadget / 'UDC').read_text().strip() == UDC_NAME
+        except FileNotFoundError:
+            bound = False
+        enabled = bound and (self.runtime / 'slot-services/usb.on').exists()
+        state = self.udc.joinpath('state').read_text().strip() if self.udc.exists() else 'unavailable'
+        label = 'Off'
+        if enabled:
+            label = {'configured': 'Connected', 'suspended': 'Connected (suspended)',
+                     'not attached': 'Waiting for cable'}.get(state, 'Waiting for computer approval')
+        options = self.options()
+        running = self.state()
+        address = '--';peer = '--'
+        if enabled:
+            if running.get('internet'):
+                lease = running.get('lease', '')
+                address = lease.split('/')[0] if lease else '--'
+                peer = running.get('gateway', '--')
+                if state == 'configured':label = 'Sharing ready' if lease else 'Enable sharing'
+            else:address = ADDRESS;peer = PEER
+        return {'protocol': '2', 'enabled': str(int(enabled)), 'state': label,
+                'legacy': str(int(options['legacy'])), 'internet': str(int(options['internet'])),
+                'address': address, 'peer': peer,
+                'ssh': 'ssh root@' + address if address != '--' else '--'}
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('command', choices=['on', 'off', 'status', 'setup', 'cleanup', 'serve', 'legacy', 'internet', 'dhcp'])
+    parser.add_argument('value', nargs='?')
+    args = parser.parse_args()
+    controller = Controller()
+    try:
+        if args.command in ('legacy', 'internet'):
+            controller.require(args.value in ('on', 'off'), 'Choose on or off')
+            controller.configure(args.command, args.value == 'on')
+        elif args.command == 'serve':controller.serve()
+        elif args.command == 'dhcp':
+            controller.dhcp(args.value, os.environ)
+            return
+        elif args.command in ('on', 'off'):
+            controller.call('systemctl', 'start' if args.command == 'on' else 'stop', 'slot-usb-network.service')
+        elif args.command in ('setup', 'cleanup'):
+            with controller.locked():
+                getattr(controller, args.command)()
+        for key, value in controller.status().items():
+            print(key + '\t' + value)
+    except (NetworkError, OSError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        raise SystemExit(1)
+
+
+if __name__ == '__main__':
+    main()

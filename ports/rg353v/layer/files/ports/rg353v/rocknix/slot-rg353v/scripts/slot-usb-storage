@@ -1,0 +1,475 @@
+#!/usr/bin/env python3
+"""Exclusive RG353V boot-disk content ownership: local mount or USB host."""
+import contextlib
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import signal
+import stat
+import subprocess
+import sys
+import time
+from typing import NamedTuple
+
+RUN = Path('/run/slot-usb')
+CACHE = Path('/storage/.cache/slot-usb')
+GADGET = Path('/sys/kernel/config/usb_gadget/slot-storage')
+UDC = Path('/sys/class/udc/fcc00000.usb')
+CONTENT = Path('/storage/slotcontent')
+UNITDIR = Path('/run/systemd/system')
+GUARD = '[Unit]\nConditionPathExists=!/run/slot-usb/active\n'
+UNITS = ('slot-rg353v.service', 'slot-sharing.service', 'wsdd2.service',
+         'slot-bootstage-report.path', 'slot-bootstage-report.service')
+
+
+class StorageError(Exception):
+    pass
+
+
+def require(ok, message):
+    if not ok:
+        raise StorageError(message)
+
+
+def command(args, check=True, timeout=30):
+    out = subprocess.run(args, capture_output=True, text=True, timeout=timeout, cwd='/')
+    require(not check or out.returncode == 0, f'{Path(args[0]).name} failed: {out.stderr.strip()[:160]}')
+    return out
+
+
+def atomic(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix('.tmp')
+    with tmp.open('w') as stream:
+        stream.write(text)
+        stream.flush()
+        os.fsync(stream.fileno())
+    tmp.replace(path)
+    fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def write(path, text):
+    # ConfigFS attributes must be written directly, never atomically replaced.
+    with path.open('w') as stream:
+        stream.write(text + '\n')
+
+
+def mounts():
+    rows = []
+    for row in Path('/proc/mounts').read_text().splitlines():
+        fields = row.split()
+        rows.append((os.path.realpath(fields[0]), fields[1], fields[2]))
+    return rows
+
+
+class ContentTarget(NamedTuple):
+    device: Path
+    disk: str
+    media: str
+    cid: str
+    uuid: str
+    rdev: int
+
+
+def content_identity(device):
+    """Pin the actual partition and card, rather than a shared SLOT label."""
+    device = Path(device).resolve(strict=True)
+    match = re.fullmatch(r'(mmcblk\d+)p3', device.name)
+    require(match is not None and device.parent == Path('/dev'), 'Not a Slot games partition')
+    disk = match[1]
+    node = Path('/sys/class/block') / disk
+    partition = Path('/sys/class/block') / device.name
+    require(partition.resolve().parent == node.resolve()
+            and (partition / 'partition').read_text().strip() == '3', 'Partition identity changed')
+    media = (node / 'device/type').read_text().strip()
+    require(media in ('MMC', 'SD'), 'Unsupported storage device')
+    cid = (node / 'device/cid').read_text().strip()
+    require(re.fullmatch(r'[0-9a-fA-F]{32}', cid) is not None, 'Cannot verify storage identity')
+    require((node / 'ro').read_text().strip() == '0'
+            and (partition / 'ro').read_text().strip() == '0', 'Games storage is read-only')
+    info = device.stat()
+    require(stat.S_ISBLK(info.st_mode), 'Games storage is not a block device')
+    for field, expected in [('TYPE', 'exfat'), ('LABEL', 'SLOT')]:
+        require(command(['blkid', '-p', '-s', field, '-o', 'value', str(device)]).stdout.strip() == expected,
+                'Content partition identity changed')
+    uuid = command(['blkid', '-p', '-s', 'UUID', '-o', 'value', str(device)]).stdout.strip()
+    require(bool(uuid) and len(uuid) < 128, 'Cannot verify games filesystem identity')
+    return ContentTarget(device, disk, media, cid, uuid, info.st_rdev)
+
+
+def system_mounts_match(device, table):
+    match = re.fullmatch(r'/dev/(mmcblk\d+)p3', str(device))
+    require(match is not None, 'Not a Slot games partition')
+    prefix = '/dev/' + match[1]
+    require([(src, kind) for src, target, kind in table if target == '/flash'] == [(prefix + 'p1', 'vfat')]
+            and [(src, kind) for src, target, kind in table if target == '/storage'] == [(prefix + 'p2', 'ext4')],
+            'Boot, system and games storage must belong to the same disk')
+
+
+def content_target(table):
+    entries = [(src, kind) for src, target, kind in table if target == str(CONTENT)]
+    require(len(entries) == 1 and entries[0][1] == 'exfat', 'Content partition is not mounted')
+    device = Path(entries[0][0])
+    system_mounts_match(device, table)
+    require(sum(src == str(device) for src, _, _ in table) == 1, 'Games partition has multiple local mounts')
+    return content_identity(device)
+
+
+def preflight():
+    require(Path('/proc/device-tree/model').read_text().strip('\0') == 'Anbernic RG353V', 'Unsupported device')
+    require(UDC.is_dir(), 'USB adapter unavailable')
+    table = mounts()
+    target = content_target(table)
+    state = (CONTENT / 'Config/slot.state').read_text()
+    require(not any(line.startswith('cart=') and line != 'cart=' for line in state.splitlines()),
+            'Eject the game with F first')
+    manager = json.loads(Path('/storage/slot-manager/state.json').read_text())
+    require(manager.get('pending') is None, 'Finish the pending Slot update first')
+    pointer = Path('/storage/slot-os-updates/state.json')
+    if pointer.exists():
+        name = json.loads(pointer.read_text()).get('transaction')
+        if name:
+            require(isinstance(name, str) and '/' not in name and name not in ('.', '..'), 'Invalid OS update state')
+            record = json.loads((pointer.parent / 'transactions' / name / 'transaction.json').read_text())
+            require(record.get('phase') == 'confirmed', 'Finish the pending OS update first')
+    # Do not take over MTP, networking, recovery, or another gadget session.
+    for bound in GADGET.parent.glob('*/UDC'):
+        require(not bound.read_text().strip(), 'Another USB mode is active')
+    return target
+
+
+def event(text):
+    print(time.strftime('%Y-%m-%dT%H:%M:%S'), text, flush=True)
+
+
+def status(*lines, phase=None):
+    if phase is not None:
+        atomic(RUN / 'phase', phase + '\n')
+    atomic(RUN / 'status', '\n'.join(lines) + '\n')
+    event(' | '.join(lines))
+
+
+def host_finished(media_shared, backing, state, cancel, cable=True):
+    """An empty waiting LUN is cancellable; shared media requires host release."""
+    if not media_shared:
+        return 'cancelled' if cancel else None
+    if not backing:
+        return 'ejected'
+    if state == 'not attached' and not cable:
+        return 'disconnected'
+    return None
+
+
+class Session:
+    def __init__(self, target):
+        self.target = target
+        self.device = target.device
+        self.masked = []
+        self.guards = []
+        self.active = []
+        self.screen = None
+        self.owns = False
+        self.unmounted = False
+        self.bound = False
+        self.media_shared = False
+        self.host_released = False
+        self.stop_requested = False
+
+    def inhibit_stop(self, *_):
+        self.stop_requested = True
+        (RUN / 'cancel').touch()
+
+    def verify_unmounted(self):
+        table = mounts()
+        system_mounts_match(self.device, table)
+        require(content_identity(self.device) == self.target, 'Games storage changed during USB handoff')
+        require(not any(device == str(self.device) for device, _, _ in table),
+                'Content still has a local mount; refusing a mounted USB backing device')
+
+    def quiesce(self):
+        saved = []
+        for unit in UNITS:
+            state = command(['systemctl', 'show', '--property=LoadState,ActiveState,UnitFileState', unit]).stdout
+            values = dict(line.split('=', 1) for line in state.splitlines() if '=' in line)
+            if values.get('LoadState') == 'not-found':
+                continue
+            require(values.get('UnitFileState') not in ('masked', 'masked-runtime'), f'{unit} is already masked')
+            saved.append((unit, values.get('ActiveState') == 'active'))
+        # Durable breadcrumb also records service state for a controller restart.
+        require(content_target(mounts()) == self.target, 'Games storage changed before USB handoff')
+        atomic(CACHE / 'owner.json', json.dumps({'device': str(self.device), 'cid': self.target.cid,
+                                               'uuid': self.target.uuid, 'active': [u for u, on in saved if on]}))
+        self.owns = True
+        self.active = [u for u, on in saved if on]
+        for unit, _ in saved:
+            if unit.startswith('slot-bootstage-report.'):
+                # Local /storage units outrank /run masks. Drop-in conditions apply
+                # to those units too, without editing persistent user files.
+                path = UNITDIR / (unit + '.d') / '90-slot-usb-storage.conf'
+                require(not path.exists(), 'USB service guard already exists')
+                self.guards.append(path)
+                atomic(path, GUARD)
+            else:
+                command(['systemctl', 'mask', '--runtime', unit])
+                self.masked.append(unit)
+                require(command(['systemctl', 'show', '--value', '--property=LoadState', unit]).stdout.strip() == 'masked',
+                        'Could not block ' + unit)
+        if self.guards:
+            command(['systemctl', 'daemon-reload'])
+            for guard in self.guards:
+                unit = guard.parent.name[:-2]
+                require(str(guard) in command(['systemctl', 'show', '--value', '--property=DropInPaths', unit]).stdout,
+                        'Could not guard ' + unit)
+        command(['systemctl', 'stop', *[u for u, _ in saved]])
+        # Recheck the saved game marker after the frontend has stopped.
+        require(not any(line.startswith('cart=') and line != 'cart='
+                        for line in (CONTENT / 'Config/slot.state').read_text().splitlines()),
+                'Eject the game with F first')
+        command(['systemctl', 'mask', '--runtime', 'storage-slotcontent.mount'])
+        self.masked.append('storage-slotcontent.mount')
+        os.sync()
+        try:
+            command(['umount', str(CONTENT)])  # Never lazy/forced: busy means rollback.
+        finally:
+            self.unmounted = not any(target == str(CONTENT) for _, target, _ in mounts())
+        self.verify_unmounted()
+
+    def setup(self):
+        self.verify_unmounted()
+        require(not GADGET.exists(), 'USB gadget needs recovery')
+        GADGET.mkdir()
+        for name, value in [('idVendor', '0x1d6b'), ('idProduct', '0x0104'),
+                            ('bcdUSB', '0x0200'), ('bcdDevice', '0x0100'), ('max_speed', 'high-speed')]:
+            write(GADGET / name, value)
+        strings = GADGET / 'strings/0x409'
+        strings.mkdir()
+        serial = Path('/storage/.cache/systemd-machine-id').read_text().strip()
+        require(serial.isalnum() and len(serial) <= 64, 'Invalid USB serial')
+        for name, value in [('serialnumber', serial), ('manufacturer', 'Slot'), ('product', 'Slot RG353V Storage')]:
+            write(strings / name, value)
+        conf = GADGET / 'configs/c.1'
+        conf.mkdir()
+        (conf / 'strings/0x409').mkdir()
+        write(conf / 'strings/0x409/configuration', 'Slot content')
+        write(conf / 'MaxPower', '250')
+        function = GADGET / 'functions/mass_storage.0'
+        function.mkdir()
+        for name, value in [('removable', '1'), ('ro', '0'), ('nofua', '0'), ('cdrom', '0')]:
+            write(function / 'lun.0' / name, value)
+        write(function / 'stall', '1')
+        # Enumerate an empty removable drive. macOS can pause at "addressed"
+        # for accessory approval; no content is exposed during that wait.
+        self.verify_unmounted()
+        require(not (function / 'lun.0/file').read_text().strip(), 'USB media is already open')
+        (conf / 'mass_storage.0').symlink_to(function)
+        write(GADGET / 'UDC', UDC.name)
+        self.bound = True
+
+    def detach(self):
+        if not GADGET.exists():
+            return
+        if (GADGET / 'UDC').read_text().strip():
+            write(GADGET / 'UDC', '')
+        self.bound = False
+        function = GADGET / 'functions/mass_storage.0'
+        lun = function / 'lun.0/file'
+        if lun.exists():
+            write(lun, '')
+            require(not lun.read_text().strip(), 'USB media is still open')
+        link = GADGET / 'configs/c.1/mass_storage.0'
+        link.unlink(missing_ok=True)
+        # Only directories we created; ConfigFS attributes are kernel-owned.
+        for rel in ['functions/mass_storage.0', 'configs/c.1/strings/0x409',
+                    'configs/c.1', 'strings/0x409']:
+            path = GADGET / rel
+            if path.exists():
+                path.rmdir()
+        GADGET.rmdir()
+
+    def restore(self):
+        require(not self.media_shared or self.host_released, 'USB host has not released content')
+        self.detach()  # If detach fails, never remount or restart writers.
+        if 'storage-slotcontent.mount' in self.masked:
+            command(['systemctl', 'unmask', '--runtime', 'storage-slotcontent.mount'])
+            self.masked.remove('storage-slotcontent.mount')
+        if self.unmounted:
+            self.verify_unmounted()
+            status('Checking content...', 'Please wait', phase='restoring')
+            # The guard is removed only after USB no longer has the device open.
+            (RUN / 'restoring').touch()
+            try:
+                command(['/usr/bin/slot-mount-content'])
+                require(content_target(mounts()) == self.target, 'Wrong games storage was restored')
+            finally:
+                (RUN / 'restoring').unlink(missing_ok=True)
+            self.unmounted = False
+        (RUN / 'active').unlink(missing_ok=True)
+        if self.screen:
+            self.screen.wait(timeout=5)
+            self.screen = None
+        for unit in self.masked:
+            command(['systemctl', 'unmask', '--runtime', unit])
+        self.masked = []
+        for guard in self.guards:
+            require(guard.read_text() == GUARD, 'USB service guard changed')
+            guard.unlink()
+        if self.guards:
+            command(['systemctl', 'daemon-reload'])
+        self.guards = []
+        (CACHE / 'owner.json').unlink(missing_ok=True)
+        self.owns = False
+
+    def launch_screen(self):
+        # Run from immutable SYSTEM, never from the exported partition.
+        env = dict(os.environ, SDL_VIDEODRIVER='kmsdrm', SDL_KMSDRM_DEVICE_INDEX='0',
+                   SDL_KMSDRM_REQUIRE_DRM_MASTER='1', XDG_RUNTIME_DIR='/run/0-runtime-dir',
+                   SLOT_SILENT='1')
+        self.screen = subprocess.Popen(['/usr/share/slot/System/slot', '--usb-storage-screen'],
+                                       env=env, cwd='/', stdin=subprocess.DEVNULL)
+        deadline = time.monotonic() + 12
+        while not (RUN / 'screen-ready').exists():
+            require(self.screen.poll() is None, 'USB screen could not start')
+            require(time.monotonic() < deadline, 'USB screen did not become ready')
+            time.sleep(.1)
+
+    def transfer(self):
+        started = time.monotonic()
+        last = None
+        detached_at = None
+        screen_failed = False
+        while True:
+            if self.screen.poll() is not None and not screen_failed:
+                # A display failure must not disconnect a host with cached writes.
+                event('USB screen stopped; waiting for host eject or physical disconnect')
+                screen_failed = True
+            state = (UDC / 'state').read_text().strip()
+            lun = GADGET / 'functions/mass_storage.0/lun.0/file'
+            backing = lun.read_text().strip()
+            cancel = (RUN / 'cancel').exists()
+            phy = Path('/sys/class/extcon/extcon0/state').read_text().splitlines()
+            cable = 'USB=1' in phy or 'SDP=1' in phy or 'CDP=1' in phy
+            detached_at = (detached_at or time.monotonic()) if not cable and state == 'not attached' else None
+            physically_detached = detached_at is not None and time.monotonic() - detached_at >= 2
+            # The latch tracks content exposure, not USB state: a bus reset
+            # must never make a previously shared drive cancellable again.
+            done = host_finished(self.media_shared, backing, state, cancel, not physically_detached)
+            if done:
+                self.host_released = True
+                event('Host finished: ' + done)
+                return
+            if not self.media_shared and state == 'configured':
+                require(not backing, 'USB media is already open')
+                self.verify_unmounted()
+                # Give cancellation priority even if approval completes in
+                # this iteration. A later press follows the shared-drive rules.
+                if (RUN / 'cancel').exists():
+                    event('Host finished: cancelled')
+                    return
+                self.media_shared = True
+                write(lun, str(self.device))
+                event('Content media shared with configured host')
+            message = ('Connected to computer', 'Open SLOT on your computer', '', 'Eject SLOT before unplugging', 'Slot resumes after ejecting') if self.media_shared else (
+                'Waiting for computer...', 'Use the DC USB-C data port', 'Allow USB access if prompted')
+            if cancel and self.media_shared:
+                message = ('Eject SLOT on your computer first', 'File transfer is still active', '', 'Do not power off during transfer')
+            if message != last:
+                status(*message, phase='shared' if self.media_shared else 'waiting')
+                last = message
+            if not self.media_shared and time.monotonic() - started > 180 and state == 'not attached':
+                event('No host attached within three minutes')
+                return
+            # RK3566 needs an explicit connect when binding without a data cable.
+            if not self.media_shared and state == 'not attached' and ('SDP=1' in phy or 'CDP=1' in phy):
+                try:
+                    transfer = Path('/sys/kernel/debug/usb/fcc00000.usb/ep0out/transfer_type').read_text().strip()
+                    if transfer != 'control':
+                        write(UDC / 'soft_connect', 'connect')
+                except OSError:
+                    event('Waiting for USB controller to become ready')
+            time.sleep(.2)
+
+
+def run_session():
+    RUN.mkdir(parents=True, exist_ok=True)
+    CACHE.mkdir(parents=True, exist_ok=True)
+    failure = None
+    session = None
+    with contextlib.ExitStack() as locks:
+        for path in [CACHE / 'lock', Path('/storage/slot-os-updates/control/lock'),
+                     Path('/storage/slot-manager/lock'), Path('/storage/.cache/slot-sharing.lock')]:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            stream = locks.enter_context(path.open('a'))
+            try:
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise StorageError('An update or sharing operation is active') from None
+        target = preflight()
+        require(not (CACHE / 'owner.json').exists(), 'USB storage needs recovery')
+        for name in ['cancel', 'screen-ready', 'restoring']:
+            (RUN / name).unlink(missing_ok=True)
+        (RUN / 'active').touch()
+        session = Session(target)
+        signal.signal(signal.SIGTERM, session.inhibit_stop)
+        signal.signal(signal.SIGINT, session.inhibit_stop)
+        try:
+            status('Preparing USB storage...', 'Please wait', phase='preparing')
+            session.quiesce()
+            session.launch_screen()
+            session.setup()
+            session.transfer()
+        except Exception as error:
+            failure = error
+        finally:
+            try:
+                session.restore()
+            except Exception as error:
+                status('Content recovery required', str(error)[:65], 'Restart safely after ejecting SLOT', phase='restoring')
+                # Retain the ownership marker and writer masks on any failure.
+                raise
+    # Starting the frontend takes its own updater lock. Release ours first.
+    if session.active:
+        command(['systemctl', 'start', '--no-block', *session.active])
+    event('Local content ownership restored')
+    if failure:
+        raise failure
+
+
+def main():
+    action = sys.argv[1] if len(sys.argv) == 2 else ''
+    if action == 'start':
+        require(not (RUN / 'active').exists(), 'USB storage is already active')
+        preflight()
+        (RUN / 'error').unlink(missing_ok=True)
+        command(['systemctl', 'start', '--no-block', 'slot-usb-storage.service'])
+        deadline = time.monotonic() + 50
+        while time.monotonic() < deadline:
+            if (RUN / 'active').exists() and (RUN / 'screen-ready').exists():
+                return
+            state = command(['systemctl', 'show', '--value', '--property=ActiveState',
+                             'slot-usb-storage.service']).stdout.strip()
+            if state in ('failed', 'inactive'):
+                detail = (RUN / 'error').read_text().strip() if (RUN / 'error').exists() else 'USB storage could not start'
+                raise StorageError(detail)
+            time.sleep(.2)
+        raise StorageError('USB storage is taking too long to start')
+    elif action == 'run':
+        run_session()
+    else:
+        raise StorageError('Usage: slot-usb-storage start|run')
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (StorageError, OSError, ValueError, subprocess.SubprocessError) as error:
+        if sys.argv[1:] == ['run']:
+            with contextlib.suppress(OSError):
+                atomic(RUN / 'error', str(error) + '\n')
+        print(str(error), file=sys.stderr)
+        sys.exit(1)

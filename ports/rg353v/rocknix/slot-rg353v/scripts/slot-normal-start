@@ -1,0 +1,9 @@
+#!/bin/sh
+# Root-private verified recipes keep the normal path out of the Python updater.
+set -eu
+manager=/storage/slot-manager
+if /usr/bin/slot-verify --runtime "$manager"; then
+  echo 'Using verified native normal-boot path'
+  exec sh "$manager/normal-boot-v2.sh"
+fi
+exec /usr/bin/slot-update run

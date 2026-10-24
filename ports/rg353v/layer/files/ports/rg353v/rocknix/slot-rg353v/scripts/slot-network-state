@@ -1,0 +1,17 @@
+#!/bin/sh
+# NetworkManager's state and stable identity must survive the volatile /var tree.
+set -eu
+state=/var/lib/NetworkManager
+persistent=/storage/.cache/NetworkManager
+mkdir -p "$persistent" /var/lib
+chmod 700 "$persistent"
+[ ! -L "$state" ] || exit 0
+if [ -d "$state" ]; then
+  for file in "$state"/* "$state"/.[!.]* "$state"/..?*; do
+    [ -e "$file" ] || continue
+    destination=$persistent/$(basename "$file")
+    [ -e "$destination" ] || cp -a "$file" "$destination"
+  done
+  mv "$state" "$state.slot-volatile"
+fi
+ln -s "$persistent" "$state"

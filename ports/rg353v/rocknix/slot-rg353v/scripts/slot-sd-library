@@ -1,0 +1,335 @@
+#!/usr/bin/env python3
+"""Secondary game libraries from RG353V TF1/TF2; never mount boot/storage partitions."""
+from pathlib import Path
+import argparse, fcntl, json, os, re, stat, subprocess
+
+CONTROLLERS = {'fe2b0000.mmc': 'TF1', 'fe2c0000.mmc': 'TF2'}
+BASE = Path('/run/slot-sd-library')
+GAME_STATE = Path('/storage/slotcontent/Config/slot.state')
+USB_ACTIVE = Path('/run/slot-usb/active')
+SAVE_LOCATION = Path('/storage/slotcontent/Config/save-location')
+
+
+def save_location():
+    try:
+        return 'game' if SAVE_LOCATION.read_text().strip() == 'game' else 'system'
+    except FileNotFoundError:
+        return 'system'
+
+
+def idle_required():
+    if GAME_STATE.exists() and any(l.startswith('cart=') and l != 'cart=' for l in GAME_STATE.read_text().splitlines()):
+        raise RuntimeError('Eject the game with F first')
+    if USB_ACTIVE.exists():
+        raise RuntimeError('Exit USB storage first')
+
+
+def change_save_location(value):
+    if value not in ('system', 'game') or os.geteuid() != 0:
+        raise RuntimeError('Invalid save location or administrator access required')
+    idle_required()
+    before = save_location()
+    if value == before:
+        return 'Save location is '+value.title()
+    desired = 'rw' if value == 'game' else 'ro'
+    cards = devices()
+    changes = []
+    committed = False
+    try:
+        for slot in ('TF1', 'TF2'):
+            target = str(BASE/slot)
+            rows = [r for r in mount_rows() if r[1] == target]
+            if not rows:
+                continue
+            node = cards.get(slot)
+            if len(rows) != 1 or node is None:
+                raise RuntimeError('Card changed; refresh the list')
+            row = rows[0]
+            opts = set(row[3].split(','))
+            if (disk_name(row[0]) != node.name or row[2] != 'exfat'
+                    or not {'nosuid', 'nodev', 'noexec'}.issubset(opts)
+                    or any(r[1] != target and disk_name(r[0]) == node.name for r in mount_rows())):
+                raise RuntimeError('Card mount ownership conflict')
+            token = card_id(node)
+            old = 'rw' if 'rw' in opts else 'ro'
+            run('mount', '-o', 'remount,'+desired+',nosuid,nodev,noexec,noatime', target)
+            changes.append((target, old))
+            if card_id(node) != token or desired not in mounted().get(target, ['', '', '', ''])[3].split(','):
+                raise RuntimeError('Card changed or mount mode was not applied')
+        SAVE_LOCATION.parent.mkdir(parents=True, exist_ok=True)
+        # Replace only this preference; never rewrite slot.state owned by Slot.
+        temp = SAVE_LOCATION.with_name('.save-location.'+str(os.getpid())+'.new')
+        try:
+            with temp.open('x') as f:
+                f.write(value+'\n');f.flush();os.fsync(f.fileno())
+            temp.replace(SAVE_LOCATION)
+            committed = True
+        finally:
+            temp.unlink(missing_ok=True)
+        fd = os.open(SAVE_LOCATION.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try: os.fsync(fd)
+        finally: os.close(fd)
+    except Exception:
+        for target, old in reversed(changes) if not committed else []:
+            run('mount', '-o', 'remount,'+old+',nosuid,nodev,noexec,noatime', target)
+        raise
+    return 'Save location is '+value.title()+'. Existing progress has not been moved.'
+
+
+def run(*args):
+    p = subprocess.run([str(a) for a in args], capture_output=True, text=True, timeout=12)
+    if p.returncode:
+        raise RuntimeError(Path(str(args[0])).name + ': ' + p.stderr.strip()[:180])
+    return p.stdout.strip()
+
+
+def mount_rows():
+    return [row.split() for row in Path('/proc/mounts').read_text().splitlines()]
+
+
+def mounted():
+    return {row[1]: row for row in mount_rows()}
+
+
+def slot_for(node):
+    if not re.fullmatch(r'mmcblk\d+', node.name):
+        return None
+    try:
+        if (node/'device/type').read_text().strip() != 'SD':
+            return None
+        return next((slot for controller, slot in CONTROLLERS.items()
+                     if controller in node.resolve().parts), None)
+    except OSError:
+        return None
+
+
+
+def disk_name(device):
+    return re.sub(r'p\d+$', '', Path(os.path.realpath(device)).name)
+
+
+def card_id(node):
+    import hashlib  # On-demand menu identity; not part of the boot discovery path.
+    # A reinsertion of the same card gets a new sysfs inode. Do not retain its
+    # ejected state, or accept an old menu selection, across that reinsertion.
+    cid = (node/'device/cid').read_text().strip()
+    if not re.fullmatch('[0-9a-fA-F]{32}', cid):
+        raise RuntimeError('Cannot verify SD card identity')
+    sequence = (node/'diskseq').read_text().strip() if (node/'diskseq').exists() else ''
+    return hashlib.sha256(f'{node.name}:{node.stat().st_ino}:{cid}:{sequence}'.encode()).hexdigest()
+
+
+def suppressed(slot, node):
+    marker = BASE/(slot+'.ejected')
+    if not marker.exists():
+        return False
+    if node is not None and marker.read_text().strip() == card_id(node):
+        return True
+    marker.unlink()
+    return False
+
+def devices(include_system=False):
+    # Identify physical controllers, not enumerated mmcblk numbers or duplicate labels.
+    current = mounted()
+    system = {disk_name(current[p][0]) for p in ['/flash', '/storage', '/storage/slotcontent'] if p in current}
+    result = {}
+    for node in Path('/sys/class/block').glob('mmcblk*'):
+        slot = slot_for(node)
+        if slot and (include_system or node.name not in system):
+            result[slot] = node
+    return result
+
+
+def candidates(node):
+    entries = sorted(node.glob(node.name+'p*'))
+    # Whole-device exFAT and ordinary partitioned exFAT cards are both supported.
+    for entry in entries or [node]:
+        dev = Path('/dev')/entry.name
+        try:
+            major, minor = map(int, (entry/'dev').read_text().split(':'))
+            if not stat.S_ISBLK(dev.stat().st_mode) or dev.stat().st_rdev != os.makedev(major, minor):
+                continue
+            if run('blkid', '-p', '-s', 'TYPE', '-o', 'value', dev) == 'exfat':
+                yield dev
+        except (OSError, RuntimeError):
+            continue
+
+
+def refresh(require_idle=False):
+    BASE.mkdir(mode=0o755, parents=True, exist_ok=True)
+    with (BASE/'lock').open('a') as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        if require_idle:
+            idle_required()
+        report = []
+        roots = []
+        writable = save_location() == 'game'
+        mode = 'rw' if writable else 'ro'
+        cards = devices()
+        try:
+            prior = {c['slot']: c.get('serial') for c in json.loads((BASE/'status.json').read_text())['cards']}
+        except (OSError, ValueError, KeyError):
+            prior = {}
+        for slot in ['TF1', 'TF2']:
+            target = BASE/slot
+            target.mkdir(exist_ok=True)
+            existing = mounted().get(str(target))
+            node = cards.get(slot)
+            if suppressed(slot, node):
+                in_use = any(disk_name(v[0]) == node.name for v in mount_rows())
+                report.append({'slot': slot, 'state': 'In use elsewhere' if in_use else 'Safe to remove'})
+                continue
+            serial = (node/'device/serial').read_text().strip() if node else None
+            if existing and (node is None or not existing[0].startswith('/dev/'+node.name+'p')
+                             and existing[0] != '/dev/'+node.name or prior.get(slot, serial) != serial):
+                # Managed secondary mounts only; never use lazy/forced unmount or touch other mounts.
+                try:
+                    run('umount', target)
+                    existing = None
+                except (OSError, RuntimeError) as e:
+                    report.append({'slot': slot, 'state': 'Busy', 'error': str(e)})
+                    continue
+            if node is None:
+                report.append({'slot': slot, 'state': 'No card'})
+                continue
+            accepted = []
+            if existing:
+                if existing[2] != 'exfat' or mode not in existing[3].split(','):
+                    report.append({'slot': slot, 'state': 'Mount ownership conflict'})
+                    continue
+                accepted = [Path(existing[0])]
+            else:
+                for dev in candidates(node):
+                    # Do not mount an already-mounted volume a second time.
+                    if any(os.path.realpath(v[0]) == str(dev) for v in mounted().values()):
+                        report.append({'slot': slot, 'state': 'Volume already in use'})
+                        continue
+                    try:
+                        run('mount', '-t', 'exfat', '-o', mode+',nosuid,nodev,noexec,noatime', dev, target)
+                        if (target/'Games').is_dir():
+                            accepted.append(dev)
+                            break
+                        run('umount', target)
+                    except (OSError, RuntimeError, subprocess.TimeoutExpired) as e:
+                        report.append({'slot': slot, 'state': 'Read error', 'error': str(e)[:160]})
+            if accepted and (target/'Games').is_dir():
+                roots.append(str(target))
+                report.append({'slot': slot, 'state': 'Ready', 'device': str(accepted[0]),
+                               'readonly': not writable, 'root': str(target),
+                               'serial': serial})
+            elif not accepted:
+                report.append({'slot': slot, 'state': 'No exFAT Games folder'})
+        # Publish only complete snapshots. A missing card never changes the local content root.
+        for name, text in [('roots', '\n'.join(roots)+'\n'),
+                           ('status.json', json.dumps({'schema': 1, 'cards': report}, indent=2)+'\n')]:
+            tmp = BASE/(name+'.tmp')
+            tmp.write_text(text)
+            tmp.replace(BASE/name)
+        return report
+
+
+
+def card_rows():
+    current = mount_rows()
+    protected = {disk_name(row[0]) for row in current
+                 if row[1] in ('/', '/flash', '/storage', '/storage/slotcontent')}
+    rows = []
+    cards = devices(include_system=True)
+    for slot in ('TF1', 'TF2'):
+        node = cards.get(slot)
+        if node is None:
+            rows.append({'slot': slot, 'state': 'No card', 'token': '', 'action': ''})
+            continue
+        token = card_id(node)
+        if node.name in protected:
+            state, action = 'System disk - protected', ''
+        elif suppressed(slot, node) and not any(disk_name(v[0]) == node.name for v in current):
+            state, action = 'Safe to remove', 'mount'
+        else:
+            state = 'Mounted' if any(disk_name(v[0]) == node.name for v in current) else 'Inserted'
+            action = 'eject'
+        rows.append({'slot': slot, 'state': state, 'token': token, 'action': action})
+    return rows
+
+
+def change_card(action, slot, token):
+    if os.geteuid() != 0:
+        raise RuntimeError('Administrator access required')
+    row = next((r for r in card_rows() if r['slot'] == slot), None)
+    if not row or not token or row['token'] != token or row['action'] != action:
+        raise RuntimeError('Card changed or protected; refresh the list')
+    node = devices()[slot] # excludes boot, system and content disks again
+    idle_required()
+    if action == 'mount':
+        (BASE/(slot+'.ejected')).unlink(missing_ok=True)
+        return 'Card enabled. Refreshing games...'
+    for file in Path('/sys/kernel/config/usb_gadget').glob('*/functions/mass_storage.*/lun.*/file'):
+        backing = file.read_text().strip()
+        if backing and disk_name(backing) == node.name:
+            raise RuntimeError('Card is exported over USB')
+    for part in [node, *node.glob(node.name+'p*')]:
+        if list((part/'holders').glob('*')):
+            raise RuntimeError('Card is in use by another device')
+    own = str(BASE/slot)
+    card_mounts = [v for v in mount_rows() if disk_name(v[0]) == node.name]
+    if any(v[1] != own or v[2] != 'exfat' or ('rw' if save_location() == 'game' else 'ro') not in v[3].split(',') for v in card_mounts):
+        raise RuntimeError('Card is in use elsewhere; close it first')
+    if card_id(node) != token:
+        raise RuntimeError('Card changed before eject')
+    if card_mounts:
+        # umount is synchronous and flushes this filesystem. Never use -l/-f,
+        # kill processes, detach the controller, or disable power to the slot.
+        run('umount', own)
+    if any(disk_name(v[0]) == node.name for v in mount_rows()):
+        raise RuntimeError('Card is still mounted')
+    if card_id(node) != token:
+        raise RuntimeError('Card changed during eject')
+    (BASE/(slot+'.ejected')).write_text(token+'\n')
+    return slot+' is safe to remove'
+
+
+def ui(command, slot=None, token=None):
+    BASE.mkdir(mode=0o755, parents=True, exist_ok=True)
+    message = ''
+    # Same lock as discovery/repair. Fail rather than block the menu on repair.
+    with (BASE/'lock').open('a') as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if command == 'ui-save-location':
+            message = change_save_location(slot)
+        elif command not in ('ui-status', 'ui-refresh'):
+            message = change_card(command[3:], slot, token)
+    # Refresh outside the lock (refresh takes it itself).
+    if command != 'ui-status':
+        refresh()
+    print('protocol\t1')
+    print('save_location\t'+save_location().title())
+    for i, row in enumerate(card_rows()):
+        for key in ('slot', 'state', 'token', 'action'):
+            print(f'{key}_{i}\t{row[key]}')
+    if message:
+        print('message\t'+message)
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('command', choices=['refresh', 'hotplug-refresh', 'status', 'ui-status', 'ui-refresh', 'ui-eject', 'ui-mount', 'ui-save-location'])
+    p.add_argument('slot', nargs='?')
+    p.add_argument('token', nargs='?')
+    a = p.parse_args()
+    if a.command in ('ui-eject', 'ui-mount') and a.slot not in ('TF1', 'TF2'):
+        p.error('Card slot must be TF1 or TF2')
+    if a.command.startswith('ui-'):
+        try:
+            ui(a.command, a.slot, a.token)
+        except (OSError, RuntimeError, subprocess.SubprocessError) as error:
+            print('protocol\t1\nmessage\t'+re.sub(r'[\r\n\t]+', ' ', str(error))[:240])
+            raise SystemExit(1)
+    elif a.command in ('refresh', 'hotplug-refresh'):
+        print(json.dumps({'schema': 1, 'cards': refresh(require_idle=a.command == 'hotplug-refresh')}))
+    elif (BASE/'status.json').exists():
+        print((BASE/'status.json').read_text(), end='')
+    else:
+        print(json.dumps({'schema': 1, 'cards': []}))
+
+
+if __name__ == '__main__':
+    main()

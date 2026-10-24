@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "note": "Freeze timestamp-only metadata for the pinned loader/toolchain. Generic must reproduce the hardware-qualified hash. Specific is a factory build input, not the RG353V installed F-recovery loader.",
+  "recipes": {
+    "u-boot-Generic": {
+      "source_sha256": "b9476a8d5cd2499e49d75bd38fd9d41fc40342e1d3f30b950d2ab34240940b08",
+      "compiler_epoch": 1791984672,
+      "fit_epoch": 1791984674,
+      "output_sha256": "ebbe69e8ebbbf4809eb8046c1a989ffc408dc825d332d2d01e6e7fcf51780854"
+    },
+    "u-boot-Specific": {
+      "source_sha256": "f5411d1a36befdd829c51d8506ae011981d38e1b8bcba5772ae1bb6cb8c139f4",
+      "compiler_epoch": 1791984672,
+      "fit_epoch": 1791984674,
+      "output_sha256": "82f5040d4d7ca00f6bbe1a37b4468efac181262760a01e2c1622c6e08fb4400b"
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "schema": 1,
+  "date": "2026-10-23",
+  "clock": "Linux CLOCK_MONOTONIC: kernel entry to first shelf scene swap",
+  "test_type": "Three controlled software restarts per system medium",
+  "excludes": [
+    "shutdown",
+    "U-Boot and SD fallback",
+    "physical Power/orange LED/rumble interval",
+    "Wi-Fi reconnection"
+  ],
+  "shared_conditions": {
+    "installed_modules": 23,
+    "kernel_os_frontend_and_both_cores": "Identical verified payloads",
+    "library": "81 games and 85 save/state files on TF2",
+    "save_location": "Game",
+    "developer_mode": "On",
+    "usb_networking": "Off",
+    "schedutil_governor": "Off",
+    "normal_cpu_policy": "ondemand, 20000 us sampling",
+    "library_settings_hashes_match": true,
+    "first_shelf_waits_for_complete_library": true
+  },
+  "emmc": {
+    "system_medium": "Internal eMMC",
+    "TF1": "Absent",
+    "runs_s": [
+      4.309985335,
+      4.291549376,
+      4.284117042
+    ],
+    "mean_s": 4.295217251,
+    "separate_owner_boot_linux_to_shelf_s": 4.257015751,
+    "separate_owner_boot_included_in_mean": false
+  },
+  "sd": {
+    "system_medium": "TF1 microSD",
+    "emmc_boot_entry": "Temporarily disabled for automatic TF1 restarts",
+    "runs_s": [
+      5.285633877,
+      5.159944585,
+      5.124545502
+    ],
+    "mean_s": 5.190041321333333,
+    "card_dependence": "Approximately 5.2 s on the tested card. Results vary with SD card speed and quality."
+  },
+  "sd_extra_ms": 894.8240703333328,
+  "sd_extra_percent": 20.833034001365178,
+  "disjoint_stage_extra_ms": {
+    "Kernel entry → initramfs /init": -5.119333333333254,
+    "Initramfs → systemd": 326.7619999999999,
+    "systemd → Slot service": 386.3320000000001,
+    "Slot launcher → Rust entry": 90.88757000000003,
+    "Slot frontend → first scene swap": 95.96183366666666
+  },
+  "verification": {
+    "all_six_restarts_passed": true,
+    "native_runtime_and_os_integrity": "Passed",
+    "games_and_save_state_hashes": "Unchanged",
+    "all_measured_runs_retained": true,
+    "new_pre_shelf_instrumentation": false
+  },
+  "interpretation": "Comparison of complete boot-storage configurations, including TF1 presence; not an isolated raw-media-speed benchmark or physical cold Power-to-shelf measurement."
+}

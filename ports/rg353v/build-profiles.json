@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "shared": {
+    "image_remove": [
+      "modules",
+      "entware"
+    ],
+    "network_remove": [
+      "tailscale",
+      "zerotier-one",
+      "openvpn",
+      "wireguard-tools",
+      "simple-http-server",
+      "miniupnpc",
+      "speedtest-cli",
+      "samba",
+      "wsdd2"
+    ],
+    "mask_units": [
+      "rocknix-report-stats.service",
+      "rocknix-report-stats.timer",
+      "sway-touch.service"
+    ],
+    "remove_daemon_hooks": [
+      "004-tailscaled",
+      "004-zerotier-one"
+    ]
+  },
+  "normal": {
+    "image_remove": [
+      "debug",
+      "noto-sans-cjk",
+      "nfs-utils",
+      "ntfs-3g_ntfsprogs",
+      "docker"
+    ],
+    "network_remove": [],
+    "mask_units": [
+      "debug-shell.service",
+      "rpcbind.service",
+      "rpcbind.socket"
+    ],
+    "debug_packages": "no"
+  },
+  "development": {
+    "image_remove": [],
+    "network_remove": [],
+    "mask_units": [],
+    "debug_packages": "yes"
+  },
+  "retain": [
+    "slot-rg353v",
+    "slot-bootsplash",
+    "SDL2",
+    "alsa",
+    "pipewire",
+    "wireplumber",
+    "libmali",
+    "networkmanager",
+    "slot-wpa-supplicant",
+    "iwd",
+    "openssh",
+    "ksmbd-tools",
+    "avahi",
+    "corefonts",
+    "evtest",
+    "i2c-tools",
+    "procps-ng",
+    "Python3",
+    "openssl",
+    "exfatprogs",
+    "system-utils",
+    "quirks",
+    "powerstate",
+    "slot-startup-profile"
+  ]
+}

@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""Bounded RG353V RTL8821CS recovery: one host reset, then one driver retry."""
+import fcntl
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+CONTROLLER = 'fe000000.mmc'
+DRIVER = 'rtw88_8821cs'
+
+
+def execute(args):
+    return subprocess.run(args, capture_output=True, text=True, timeout=10)
+
+
+class Recovery:
+    def __init__(self, sysfs=Path('/sys'), runtime=Path('/run'), execute=execute, sleep=time.sleep):
+        self.sysfs = Path(sysfs)
+        self.runtime = Path(runtime)
+        self.execute = execute
+        self.sleep = sleep
+        self.controller = self.sysfs / 'bus/platform/devices' / CONTROLLER
+        self.driver = self.sysfs / 'bus/platform/drivers/dwmmc_rockchip'
+        self.marker = self.runtime / 'slot-wifi-probe-recovery.attempt'
+        self.driver_marker = self.runtime / 'slot-wifi-probe-recovery.driver-attempt'
+
+    def hardware(self):
+        compatible = (self.sysfs / 'firmware/devicetree/base/compatible').read_bytes().split(b'\0')
+        if b'anbernic,rg353v' not in compatible:
+            raise ValueError('unsupported model')
+        if list((self.controller / 'mmc_host').rglob('block')):
+            raise ValueError('controller contains a block device')
+        return self.controller.exists()
+
+    def device(self):
+        devices = list((self.controller / 'mmc_host').glob('mmc*/mmc*:*/mmc*:*:*'))
+        if len(devices) != 1:
+            raise ValueError('expected one SDIO function')
+        dev = devices[0]
+        if ((dev / 'vendor').read_text().strip(), (dev / 'device').read_text().strip()) != ('0x024c', '0xc821'):
+            raise ValueError('unsupported SDIO device')
+        return dev
+
+    def radio_enabled(self):
+        result = self.execute(['nmcli', 'radio', 'wifi'])
+        return result.returncode == 0 and result.stdout.strip() == 'enabled'
+
+    def candidate(self):
+        if not self.hardware() or (self.controller / 'driver').resolve() != self.driver.resolve():
+            return None
+        dev = self.device()
+        if (dev / 'driver').exists() or list((dev / 'net').glob('*')):
+            return None
+        if not self.radio_enabled():
+            return None
+        result = self.execute(['journalctl', '-b', '-k', '--no-pager', '-o', 'cat'])
+        signature = f'{DRIVER} {dev.name}: probe with driver {DRIVER} failed with error -110'
+        if result.returncode != 0 or signature not in result.stdout:
+            return None
+        return dev, '\n'.join(line for line in result.stdout.splitlines() if f'{DRIVER} {dev.name}:' in line)[-12000:]
+
+    def restore(self):
+        if self.marker.is_file() and self.hardware() and not (self.controller / 'driver').exists():
+            if self.marker.read_text().strip() == CONTROLLER:
+                (self.driver / 'bind').write_text(CONTROLLER)
+
+    def retry_driver(self, log=print):
+        if self.driver_marker.exists():
+            log('SDIO driver retry already attempted this boot')
+            return False
+        candidate = self.candidate()
+        bind = self.sysfs / 'bus/sdio/drivers' / DRIVER / 'bind'
+        if candidate is None or not bind.is_file():
+            return False
+        dev, _ = candidate
+        if (dev / 'driver').exists() or not self.radio_enabled():
+            return False
+        self.driver_marker.write_text(dev.name + '\n')
+        log('Retrying the failed SDIO driver once without resetting its host')
+        try:
+            bind.write_text(dev.name)
+        except OSError as error:
+            log('SDIO driver retry: ' + str(error))
+        for _ in range(5):
+            self.sleep(2)
+            if not self.radio_enabled():
+                log('Wi-Fi was turned off; ending driver retry')
+                return False
+            try:
+                dev = self.device()
+                if ((dev / 'driver').resolve().name == DRIVER and list((dev / 'net').glob('*'))):
+                    log('Wi-Fi adapter restored by SDIO driver retry')
+                    return True
+            except (OSError, ValueError):
+                pass
+        log('SDIO driver retry did not restore an adapter; no further attempts')
+        return False
+
+    def recover(self, log=print):
+        if self.marker.exists():
+            log('Already attempted this boot; no further reset')
+            return False
+        candidate = self.candidate()
+        if candidate is None:
+            log('No matching failed probe; leaving Wi-Fi unchanged')
+            return False
+        dev, evidence = candidate
+        log(evidence)
+        # Recheck after gathering evidence; a user radio change wins.
+        if (dev / 'driver').exists() or not self.radio_enabled():
+            log('State changed; leaving Wi-Fi unchanged')
+            return False
+        with self.marker.open('x') as marker:
+            marker.write(CONTROLLER + '\n')
+        log('Resetting the failed Wi-Fi-only controller once')
+        try:
+            (self.driver / 'unbind').write_text(CONTROLLER)
+            self.sleep(2)
+        finally:
+            self.restore()
+        for _ in range(15):
+            self.sleep(2)
+            try:
+                dev = self.device()
+                if ((dev / 'driver').resolve().name == DRIVER and list((dev / 'net').glob('*'))):
+                    log('Wi-Fi adapter restored; NetworkManager handles reconnect')
+                    return True
+            except (OSError, ValueError):
+                pass
+        log('Adapter still unavailable after host reset; no more automatic resets this boot')
+        return self.retry_driver(log)
+
+
+def main():
+    recovery = Recovery()
+    if sys.argv[1:] == ['--restore']:
+        recovery.restore()
+        return
+    if sys.argv[1:]:
+        raise ValueError('unexpected arguments')
+    with (recovery.runtime / 'slot-wifi-probe-recovery.lock').open('a') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return
+        recovery.sleep(20)
+        folder = Path('/storage/slot-diagnostics')
+        folder.mkdir(parents=True, exist_ok=True)
+        for old, new in [('wifi-probe-previous.log', 'wifi-probe-older.log'),
+                         ('wifi-probe-current.log', 'wifi-probe-previous.log')]:
+            if (folder / old).exists():
+                (folder / old).replace(folder / new)
+        with (folder / 'wifi-probe-current.log').open('w', buffering=1) as output:
+            output.write('Boot ID: ' + Path('/proc/sys/kernel/random/boot_id').read_text())
+            def log(message):
+                output.write(str(message) + '\n')
+                print(message, flush=True)
+            try:
+                recovery.recover(log)
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                log('Recovery stopped: ' + str(error))
+                raise
+
+
+if __name__ == '__main__':
+    main()

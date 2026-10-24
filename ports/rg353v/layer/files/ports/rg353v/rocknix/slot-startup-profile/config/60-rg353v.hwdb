@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Fixed RG353V inputs, verified against the owner's installed kernel.
+# Other input properties are provided by udev's input_id builtin.
+
+id-input:modalias:input:b0019v0001p0001e0100*
+ ID_INPUT_KEY=1
+
+evdev:name:retrogame_joypad:*
+ ID_INPUT_TABLET=1
+ ID_INPUT_TABLET_PAD=1
+

@@ -1,0 +1,74 @@
+{
+ "schema": 1,
+ "init": [
+  "load_modules",
+  "recovery_mode",
+  "check_disks",
+  "mount_flash",
+  "set_consolefont",
+  "cleanup_flash",
+  "update_bootmenu",
+  "mount_sysroot",
+  "mount_storage",
+  "load_splash",
+  "check_update",
+  "prepare_sysroot"
+ ],
+ "services": [
+  {
+   "id": "modules",
+   "units": [
+    "systemd-modules-load.service"
+   ],
+   "optional": true
+  },
+  {
+   "id": "devices",
+   "units": [
+    "systemd-udev-trigger.service"
+   ]
+  },
+  {
+   "id": "storage",
+   "units": [
+    "storage.mount"
+   ]
+  },
+  {
+   "id": "settings",
+   "units": [
+    "userconfig.service"
+   ]
+  },
+  {
+   "id": "hardware",
+   "units": [
+    "rocknix-autostart.service"
+   ]
+  },
+  {
+   "id": "content",
+   "units": [
+    "storage-slotcontent.service"
+   ]
+  },
+  {
+   "id": "os-check",
+   "units": [
+    "slot-os-guard.service"
+   ]
+  }
+ ],
+ "frontend": [
+  "start",
+  "surface",
+  "compositor",
+  "platform",
+  "audio",
+  "frontend",
+  "faces",
+  "bezel",
+  "input",
+  "ready"
+ ]
+}

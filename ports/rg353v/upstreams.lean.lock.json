@@ -1,0 +1,28 @@
+{
+  "build": {
+    "arch": "aarch64",
+    "base_only": true,
+    "content_filesystem": "exfat",
+    "content_label": "SLOT",
+    "device": "RG353V",
+    "profile": "normal",
+    "rocknix_target": "RK3566",
+    "startup": "slot",
+    "userspace_profile": "rg353v-lean-v1"
+  },
+  "layer_sha256": "8da4544b4d011f6ef6cfd86ef1919aa1cf8b475c3e297738863ba01b19999c46",
+  "resolved_at": "2026-10-14T02:01:42.422776+00:00",
+  "schema": 1,
+  "sources": {
+    "rocknix": {
+      "commit": "c445081a59518f37d9776e5412dd7b14910696f7",
+      "ref": "refs/tags/20261001",
+      "url": "https://github.com/ROCKNIX/distribution.git"
+    },
+    "slot": {
+      "commit": "868631d7b131540df87c8e3295638e27445cdba2",
+      "ref": "refs/heads/main",
+      "url": "https://github.com/BrandonKowalski/slot.git"
+    }
+  }
+}

@@ -1,0 +1,1090 @@
+{
+  "schema": 1,
+  "profile": "rg353v-lean-v1",
+  "remove": {
+    "usr/bin/autopoint": {
+      "group": "development_tools",
+      "sha256": "5a237cb56f6456c57a1c64943c748d6f944b1ab365d99f22540b5d597c8f2008",
+      "bytes": 28148
+    },
+    "usr/bin/gettextize": {
+      "group": "development_tools",
+      "sha256": "71cf94d3c693f6e4afb2015d7823a8328e2bf8d3f01fc2cec7c78451325736e2",
+      "bytes": 42835
+    },
+    "usr/bin/msgattrib": {
+      "group": "development_tools",
+      "sha256": "ea3a2e71052b71eb81d17426c557e462f2f0b08afd652d3a1c923fb4659d6189",
+      "bytes": 67872
+    },
+    "usr/bin/msgcat": {
+      "group": "development_tools",
+      "sha256": "0439775d44840c903e88039fd44f3089ca3a5b9b9ef5e2c522bab80524a693f9",
+      "bytes": 67864
+    },
+    "usr/bin/msgcmp": {
+      "group": "development_tools",
+      "sha256": "6d7b58e8b0b39866529d1bebb970ccbd12da0e66c9c5f598fba481f235d91dcc",
+      "bytes": 67960
+    },
+    "usr/bin/msgcomm": {
+      "group": "development_tools",
+      "sha256": "2df94001e2bf02077561c519a5a2f405ad825f4eb3079c2c0a57dd7de7d7d1c1",
+      "bytes": 67848
+    },
+    "usr/bin/msgconv": {
+      "group": "development_tools",
+      "sha256": "72f4d9bf156d70eb73265c2dcf553c9e62741ea3961c136a21ce7bbd9306d04a",
+      "bytes": 67832
+    },
+    "usr/bin/msgen": {
+      "group": "development_tools",
+      "sha256": "a54c616b46a5b3a15cb81b6877bce3f03675644ed5a33f6a1b3e8726ec97cf33",
+      "bytes": 67888
+    },
+    "usr/bin/msgexec": {
+      "group": "development_tools",
+      "sha256": "c76a04f01555efefaa1c7945c7ccfcc60f60e469c339eaf8c21b9713558778da",
+      "bytes": 67872
+    },
+    "usr/bin/msgfilter": {
+      "group": "development_tools",
+      "sha256": "cb7ae2288c50a4fc121d24f5e9ec7818d6658d540e29d790055627188448bdd5",
+      "bytes": 67944
+    },
+    "usr/bin/msgfmt": {
+      "group": "development_tools",
+      "sha256": "3454ca163599587b2a6deff0d4b2c2eab74551d581c83b260259b3a28508874d",
+      "bytes": 134424
+    },
+    "usr/bin/msggrep": {
+      "group": "development_tools",
+      "sha256": "7f0fc68c3141889aee018a7f59f608be2dce2f8bd06adfdc4a52c12322cc8786",
+      "bytes": 133840
+    },
+    "usr/bin/msginit": {
+      "group": "development_tools",
+      "sha256": "1a0d4d4ad05e4bac206293b3ea8ccf6f16b7e858a7c2d55a5714a353a4fcec08",
+      "bytes": 68848
+    },
+    "usr/bin/msgmerge": {
+      "group": "development_tools",
+      "sha256": "5ce6771514308f7ed9fcf331e1a73c191ec40c1230124e767412397bb74facfb",
+      "bytes": 68416
+    },
+    "usr/bin/msgpre": {
+      "group": "development_tools",
+      "sha256": "e4a28961ed49b440b21ac0aa3713e2414d710c5eebc63dbb01f47a7ee05a3640",
+      "bytes": 67936
+    },
+    "usr/bin/msgunfmt": {
+      "group": "development_tools",
+      "sha256": "0346be11a37b2f4c48ae859f2812efe01cb18db7d3f41f570e133e80c6a1b909",
+      "bytes": 68088
+    },
+    "usr/bin/msguniq": {
+      "group": "development_tools",
+      "sha256": "576dfcd4430520a88f970e717a4b946226d70093707b67403e10c72457620111",
+      "bytes": 67840
+    },
+    "usr/bin/perf": {
+      "group": "development_tools",
+      "sha256": "cf44bcd395f299861b1a83ccb4cec7182cece1cc3c453b03daae5d89739a816e",
+      "bytes": 3796168
+    },
+    "usr/bin/po-fetch": {
+      "group": "development_tools",
+      "sha256": "f14f0ad2cba9b14c427b1bbd6036d21aabd4f6747328051594ef15350c87d39e",
+      "bytes": 22333
+    },
+    "usr/bin/recode-sr-latin": {
+      "group": "development_tools",
+      "sha256": "c9923ba734d6969bafa9445539661830a9eba6cb1fc6e791e790d565b0a01dd4",
+      "bytes": 67728
+    },
+    "usr/bin/vkcube": {
+      "group": "inactive_graphics",
+      "sha256": "2d438a5ef99ce1e51c3a4bc2446a3dac48621d0dbf38f4db269395e4df2fc3ac",
+      "bytes": 331048
+    },
+    "usr/bin/vulkaninfo": {
+      "group": "inactive_graphics",
+      "sha256": "f1b1fb8efd7b33d22218ccd56f49fbe859b5a8bef99a85af00dd01b87d0356e3",
+      "bytes": 986016
+    },
+    "usr/bin/xgettext": {
+      "group": "development_tools",
+      "sha256": "6ebae8102f9fc7abaf3e45c813261756112675ee751a6b633d2ade186db32b53",
+      "bytes": 13690824
+    },
+    "usr/lib/dri/apple_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/armada-drm_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/exynos_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/gm12u320_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/hdlcd_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/hx8357d_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/ili9163_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/ili9225_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/ili9341_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/ili9486_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/imx-dcss_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/imx-drm_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/imx-lcdif_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/ingenic-drm_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/kirin_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/kms_swrast_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/komeda_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/libdril_dri.so": {
+      "group": "inactive_graphics",
+      "sha256": "40af05f4c0c165116ca9ac7e1a14f66d76ae6b446f606b1787bb5b7e4b2bbd39",
+      "bytes": 133168
+    },
+    "usr/lib/dri/mali-dp_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/mcde_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/mediatek_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/meson_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/mi0283qt_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/mxsfb-drm_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/panel-mipi-dbi_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/panfrost_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/panthor_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/pl111_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/rcar-du_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/repaper_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/rockchip_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/rzg2l-du_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/ssd130x_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/st7586_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/st7735r_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/sti_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/stm_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/sun4i-drm_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/swrast_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/udl_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/vkms_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/dri/zynqmp-dpsub_dri.so": {
+      "group": "inactive_graphics",
+      "link": "libdril_dri.so"
+    },
+    "usr/lib/gbm/dri_gbm.so": {
+      "group": "inactive_graphics",
+      "sha256": "6a5c1c925fdca45ff21eee2c26b9249b7af9ab69d11c07959876e55f9ef31479",
+      "bytes": 133744
+    },
+    "usr/lib/gettext/cldr-plurals": {
+      "group": "development_tools",
+      "sha256": "9691f14d1c29b834a24aa18fd9e930c873343053f6d7513a3caa87c953850b08",
+      "bytes": 67936
+    },
+    "usr/lib/gettext/hostname": {
+      "group": "development_tools",
+      "sha256": "3c18c185bcb9f2e46244eb8c55ed25d875d6b8188205bc4a3b8c537a0b214527",
+      "bytes": 67696
+    },
+    "usr/lib/gettext/project-id": {
+      "group": "development_tools",
+      "sha256": "a705aaf58fc8b0f1ae77ce2b396e1af94b5c734c9b804c7faca66469bfcdc2b8",
+      "bytes": 2757
+    },
+    "usr/lib/gettext/urlget": {
+      "group": "development_tools",
+      "sha256": "49137adc3242cb19b05d7d79c9d98dff2d8054c02c6ff9e33deb9d01b142fe98",
+      "bytes": 67680
+    },
+    "usr/lib/gettext/user-email": {
+      "group": "development_tools",
+      "sha256": "2ef517faab9aaca18a0b6702a5514bf108792ce902e3a5ccb0830917e9e538c8",
+      "bytes": 14514
+    },
+    "usr/lib/gl4es/libGL.so.1": {
+      "group": "inactive_graphics",
+      "sha256": "67d52dd5484b896e35177ce28a5072ed8c2b6f5c30b40fbd0bf3a529fcf727b9",
+      "bytes": 1445864
+    },
+    "usr/lib/libEGL.so.1.1.0": {
+      "group": "inactive_graphics",
+      "sha256": "2cd4021260d95ef20ef2373df4fb465b765495f8bff63e1c554dbf6b80e17569",
+      "bytes": 133440
+    },
+    "usr/lib/libEGL_mesa.so": {
+      "group": "inactive_graphics",
+      "link": "libEGL_mesa.so.0"
+    },
+    "usr/lib/libEGL_mesa.so.0": {
+      "group": "inactive_graphics",
+      "link": "libEGL_mesa.so.0.0.0"
+    },
+    "usr/lib/libEGL_mesa.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "71ca4ca51d168b6221afdd0f9dcb7c4ac2ea0ac47421b94f0516997ea8c88c3c",
+      "bytes": 398352
+    },
+    "usr/lib/libGL.so.1": {
+      "group": "inactive_graphics",
+      "link": "libGL.so.1.7.0"
+    },
+    "usr/lib/libGL.so.1.7.0": {
+      "group": "inactive_graphics",
+      "sha256": "1fd7e2ad1138bb422cf8799e59975e1592104b1ce271c0c90930368015a084ad",
+      "bytes": 985064
+    },
+    "usr/lib/libGLESv1_CM.so.1.2.0": {
+      "group": "inactive_graphics",
+      "sha256": "75c903d2f2e4cf14478a5de0344df579ed5f292d7af44382b76373b5a447e802",
+      "bytes": 198624
+    },
+    "usr/lib/libGLESv2.so.2.1.0": {
+      "group": "inactive_graphics",
+      "sha256": "f06d640f2f536e11a9304a374f193fa7d076ae27625e6821de3bdd0790df7b5f",
+      "bytes": 198624
+    },
+    "usr/lib/libGLX.so": {
+      "group": "inactive_graphics",
+      "link": "libGLX.so.0"
+    },
+    "usr/lib/libGLX.so.0": {
+      "group": "inactive_graphics",
+      "link": "libGLX.so.0.0.0"
+    },
+    "usr/lib/libGLX.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "32ba0c588b6f1b5390b868e9a682518f89ea0c4e349c1cd19df6845f5195b677",
+      "bytes": 133360
+    },
+    "usr/lib/libGLX_mesa.so": {
+      "group": "inactive_graphics",
+      "link": "libGLX_mesa.so.0"
+    },
+    "usr/lib/libGLX_mesa.so.0": {
+      "group": "inactive_graphics",
+      "link": "libGLX_mesa.so.0.0.0"
+    },
+    "usr/lib/libGLX_mesa.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "126a1b2371ccfe8539212c5a37aedd911e402c710c458744aac3df63f1ee30cc",
+      "bytes": 331888
+    },
+    "usr/lib/libGLdispatch.so": {
+      "group": "inactive_graphics",
+      "link": "libGLdispatch.so.0"
+    },
+    "usr/lib/libGLdispatch.so.0": {
+      "group": "inactive_graphics",
+      "link": "libGLdispatch.so.0.0.0"
+    },
+    "usr/lib/libGLdispatch.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "6ed06d35bc7163fcef18a3c8c8ed2b5f896bf5807a7a3945ae947d9e0cbc4efe",
+      "bytes": 1575024
+    },
+    "usr/lib/libOpenGL.so": {
+      "group": "inactive_graphics",
+      "link": "libOpenGL.so.0"
+    },
+    "usr/lib/libOpenGL.so.0": {
+      "group": "inactive_graphics",
+      "link": "libOpenGL.so.0.0.0"
+    },
+    "usr/lib/libOpenGL.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "ae66a6e2f13c1dfff80e3ee5a14c88ea6c06f43a9d7a0d7ea53cd46eca442ff7",
+      "bytes": 395232
+    },
+    "usr/lib/libSPIRV-Tools-shared.so": {
+      "group": "inactive_graphics",
+      "sha256": "5b12ac52a91e1ee4a9914b9808e31a0c4065fb0bc18ca3311d29dd315d9a8d3f",
+      "bytes": 1512928
+    },
+    "usr/lib/libVkLayer_window_system_integration.so": {
+      "group": "inactive_graphics",
+      "sha256": "c2253e8dcc53383a9164923fff1d91d735246bd3455251bb5460355ee6c57d7a",
+      "bytes": 134080
+    },
+    "usr/lib/libX11-xcb.so": {
+      "group": "inactive_graphics",
+      "link": "libX11-xcb.so.1.0.0"
+    },
+    "usr/lib/libX11-xcb.so.1": {
+      "group": "inactive_graphics",
+      "link": "libX11-xcb.so.1.0.0"
+    },
+    "usr/lib/libX11-xcb.so.1.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "300075079567e75632ef448d3ae2e96f03c5f82620af1739abc6f69dabcb0a9e",
+      "bytes": 67088
+    },
+    "usr/lib/libX11.so": {
+      "group": "inactive_graphics",
+      "link": "libX11.so.6.4.0"
+    },
+    "usr/lib/libX11.so.6": {
+      "group": "inactive_graphics",
+      "link": "libX11.so.6.4.0"
+    },
+    "usr/lib/libX11.so.6.4.0": {
+      "group": "inactive_graphics",
+      "sha256": "4e00c8056b4986a5fd5cf6d9e69cf93cc7337e761dcb72afe56df03af3c7a270",
+      "bytes": 1196440
+    },
+    "usr/lib/libXau.so": {
+      "group": "inactive_graphics",
+      "link": "libXau.so.6"
+    },
+    "usr/lib/libXau.so.6": {
+      "group": "inactive_graphics",
+      "link": "libXau.so.6.0.0"
+    },
+    "usr/lib/libXau.so.6.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "be428cc326413faaaae22484e92747a3ac83b16d332e3a0185f458cef1e1116a",
+      "bytes": 67536
+    },
+    "usr/lib/libXcursor.so": {
+      "group": "inactive_graphics",
+      "link": "libXcursor.so.1.0.2"
+    },
+    "usr/lib/libXcursor.so.1": {
+      "group": "inactive_graphics",
+      "link": "libXcursor.so.1.0.2"
+    },
+    "usr/lib/libXcursor.so.1.0.2": {
+      "group": "inactive_graphics",
+      "sha256": "9b9382501945c7257e69e484bb4aa7c04800d1663227717b38baf1c8b91ee9c1",
+      "bytes": 68072
+    },
+    "usr/lib/libXdamage.so": {
+      "group": "inactive_graphics",
+      "link": "libXdamage.so.1"
+    },
+    "usr/lib/libXdamage.so.1": {
+      "group": "inactive_graphics",
+      "link": "libXdamage.so.1.1.0"
+    },
+    "usr/lib/libXdamage.so.1.1.0": {
+      "group": "inactive_graphics",
+      "sha256": "fd4a21727628ccb9d68713c4cd6f605b00ff6a7004a57d70dbbc89694c910eed",
+      "bytes": 67408
+    },
+    "usr/lib/libXext.so": {
+      "group": "inactive_graphics",
+      "link": "libXext.so.6.4.0"
+    },
+    "usr/lib/libXext.so.6": {
+      "group": "inactive_graphics",
+      "link": "libXext.so.6.4.0"
+    },
+    "usr/lib/libXext.so.6.4.0": {
+      "group": "inactive_graphics",
+      "sha256": "925adf81523f4195b7c73f0fec4916716815967c674e6491c35b4940d279770a",
+      "bytes": 134568
+    },
+    "usr/lib/libXfixes.so": {
+      "group": "inactive_graphics",
+      "link": "libXfixes.so.3"
+    },
+    "usr/lib/libXfixes.so.3": {
+      "group": "inactive_graphics",
+      "link": "libXfixes.so.3.1.0"
+    },
+    "usr/lib/libXfixes.so.3.1.0": {
+      "group": "inactive_graphics",
+      "sha256": "a2f58a1603b7cde400f07ae8bb0ae5b868d4866aaf338c56d5295a59794c3b65",
+      "bytes": 67512
+    },
+    "usr/lib/libXi.so": {
+      "group": "inactive_graphics",
+      "link": "libXi.so.6.1.0"
+    },
+    "usr/lib/libXi.so.6": {
+      "group": "inactive_graphics",
+      "link": "libXi.so.6.1.0"
+    },
+    "usr/lib/libXi.so.6.1.0": {
+      "group": "inactive_graphics",
+      "sha256": "71e8f7122d4d6465c7cf5a97a66de1797f55193716faed24f7856a7a7c1e6f93",
+      "bytes": 67760
+    },
+    "usr/lib/libXinerama.so": {
+      "group": "inactive_graphics",
+      "link": "libXinerama.so.1"
+    },
+    "usr/lib/libXinerama.so.1": {
+      "group": "inactive_graphics",
+      "link": "libXinerama.so.1.0.0"
+    },
+    "usr/lib/libXinerama.so.1.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "c43050b4e4156af7e7685e3a0c18f12d4c3a2d3e057b53523d88bb50794878eb",
+      "bytes": 67512
+    },
+    "usr/lib/libXrandr.so": {
+      "group": "inactive_graphics",
+      "link": "libXrandr.so.2"
+    },
+    "usr/lib/libXrandr.so.2": {
+      "group": "inactive_graphics",
+      "link": "libXrandr.so.2.2.0"
+    },
+    "usr/lib/libXrandr.so.2.2.0": {
+      "group": "inactive_graphics",
+      "sha256": "30ebc80716757c68b361e39bb40d450bf41635dec70c171ff7e43fd1951c9fff",
+      "bytes": 67648
+    },
+    "usr/lib/libXrender.so": {
+      "group": "inactive_graphics",
+      "link": "libXrender.so.1.3.0"
+    },
+    "usr/lib/libXrender.so.1": {
+      "group": "inactive_graphics",
+      "link": "libXrender.so.1.3.0"
+    },
+    "usr/lib/libXrender.so.1.3.0": {
+      "group": "inactive_graphics",
+      "sha256": "e4727e77d7ce0e22180a1076e7565edd2c327124fed58a99e039e2735de5bcb7",
+      "bytes": 67864
+    },
+    "usr/lib/libXxf86vm.so": {
+      "group": "inactive_graphics",
+      "link": "libXxf86vm.so.1"
+    },
+    "usr/lib/libXxf86vm.so.1": {
+      "group": "inactive_graphics",
+      "link": "libXxf86vm.so.1.0.0"
+    },
+    "usr/lib/libXxf86vm.so.1.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "1f3ca26e13891e9d22d80fff3ed063dc1bd3b69ddb681d2ddabe39eb52640a63",
+      "bytes": 67544
+    },
+    "usr/lib/libasan.so": {
+      "group": "development_tools",
+      "link": "libasan.so.8.0.0"
+    },
+    "usr/lib/libasan.so.8": {
+      "group": "development_tools",
+      "link": "libasan.so.8.0.0"
+    },
+    "usr/lib/libasan.so.8.0.0": {
+      "group": "development_tools",
+      "sha256": "ee96e39435db070f442b445ad0763c3f650fdfb894dd290c4d927dcf8acdf308",
+      "bytes": 1525424
+    },
+    "usr/lib/libasan.so.8.0.0T": {
+      "group": "development_tools",
+      "sha256": "10642661abbbb386515718c36a05018e0f45971cd1db499e572e96bceb65a3e4",
+      "bytes": 1525424
+    },
+    "usr/lib/libgallium-26.2.2.so": {
+      "group": "inactive_graphics",
+      "sha256": "a355c6f54aa28907197bb96baacc0622930129c08c447def0bd092a345d0ed9c",
+      "bytes": 21282336
+    },
+    "usr/lib/libgbm.so.1.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "87097c22d471ae161ae671209339e1b06f3edad5e4842ec2e4104f74ee32ec79",
+      "bytes": 67560
+    },
+    "usr/lib/libgettextlib-1.0.so": {
+      "group": "development_tools",
+      "sha256": "cd8b531f5e63803e952d56171aa699348dbb8e82696011f28c530ebf734a0e24",
+      "bytes": 1447584
+    },
+    "usr/lib/libgettextlib.so": {
+      "group": "development_tools",
+      "link": "libgettextlib-1.0.so"
+    },
+    "usr/lib/libgettextsrc-1.0.so": {
+      "group": "development_tools",
+      "sha256": "cb19a2a4abff35bed377b52509c24697e7821f4678f96e42b0f83172dfd57f1c",
+      "bytes": 404864
+    },
+    "usr/lib/libgettextsrc.so": {
+      "group": "development_tools",
+      "link": "libgettextsrc-1.0.so"
+    },
+    "usr/lib/libglfw.so": {
+      "group": "inactive_graphics",
+      "link": "libglfw.so.3"
+    },
+    "usr/lib/libglfw.so.3": {
+      "group": "inactive_graphics",
+      "link": "libglfw.so.3.3"
+    },
+    "usr/lib/libglfw.so.3.3": {
+      "group": "inactive_graphics",
+      "sha256": "73013f34a6021d1ae1b778ad4f0c9411f7c21c0ad73dd7340a8b18e0ac1e072b",
+      "bytes": 270528
+    },
+    "usr/lib/libtextstyle.so": {
+      "group": "development_tools",
+      "link": "libtextstyle.so.0.2.7"
+    },
+    "usr/lib/libtextstyle.so.0": {
+      "group": "development_tools",
+      "link": "libtextstyle.so.0.2.7"
+    },
+    "usr/lib/libtextstyle.so.0.2.7": {
+      "group": "development_tools",
+      "sha256": "7a0c33e2617dbe2d652a3a88e32ead254f45cf2262823804058bd482de40feca",
+      "bytes": 725248
+    },
+    "usr/lib/libubsan.so": {
+      "group": "development_tools",
+      "link": "libubsan.so.1.0.0"
+    },
+    "usr/lib/libubsan.so.1": {
+      "group": "development_tools",
+      "link": "libubsan.so.1.0.0"
+    },
+    "usr/lib/libubsan.so.1.0.0": {
+      "group": "development_tools",
+      "sha256": "5aeede338e67d10fc672c15a50fbb5f425d6fad572aa4759221852d609eaabf6",
+      "bytes": 472320
+    },
+    "usr/lib/libubsan.so.1.0.0T": {
+      "group": "development_tools",
+      "sha256": "a9955135a3cca462f1c9927c52c839e7f363b70180ad812d2f5b54347074f05d",
+      "bytes": 472320
+    },
+    "usr/lib/libvulkan.so": {
+      "group": "inactive_graphics",
+      "link": "libvulkan.so.1"
+    },
+    "usr/lib/libvulkan.so.1": {
+      "group": "inactive_graphics",
+      "link": "libvulkan.so.1.4.347"
+    },
+    "usr/lib/libvulkan.so.1.4.347": {
+      "group": "inactive_graphics",
+      "sha256": "c2816fe6db16f77e5e47fc302744c2ae4b0aa47bb76c54779a1c1077cf3c01d1",
+      "bytes": 592248
+    },
+    "usr/lib/libwayland-client.so": {
+      "group": "inactive_graphics",
+      "link": "libwayland-client.so.0"
+    },
+    "usr/lib/libwayland-client.so.0": {
+      "group": "inactive_graphics",
+      "link": "libwayland-client.so.0.26.0"
+    },
+    "usr/lib/libwayland-client.so.0.26.0": {
+      "group": "inactive_graphics",
+      "sha256": "db85f85d31eb25cc4d4e33459869335b73f1cef0d374c8f92257462c8128ffa4",
+      "bytes": 200280
+    },
+    "usr/lib/libwayland-cursor.so": {
+      "group": "inactive_graphics",
+      "link": "libwayland-cursor.so.0"
+    },
+    "usr/lib/libwayland-cursor.so.0": {
+      "group": "inactive_graphics",
+      "link": "libwayland-cursor.so.0.26.0"
+    },
+    "usr/lib/libwayland-cursor.so.0.26.0": {
+      "group": "inactive_graphics",
+      "sha256": "e5ec7e9abdce0a6609af8534de1701f5b39254c06aeb4fe6dcddac97babcdf7d",
+      "bytes": 80480
+    },
+    "usr/lib/libwayland-egl.so": {
+      "group": "inactive_graphics",
+      "link": "libwayland-egl.so.1"
+    },
+    "usr/lib/libwayland-egl.so.1": {
+      "group": "inactive_graphics",
+      "link": "libwayland-egl.so.1.26.0"
+    },
+    "usr/lib/libwayland-egl.so.1.26.0": {
+      "group": "inactive_graphics",
+      "sha256": "8fe77b91a49b90227435d88247b6ce0acca81df2a858edef913edc86743d1be2",
+      "bytes": 67264
+    },
+    "usr/lib/libwayland-server.so": {
+      "group": "inactive_graphics",
+      "link": "libwayland-server.so.0"
+    },
+    "usr/lib/libwayland-server.so.0": {
+      "group": "inactive_graphics",
+      "link": "libwayland-server.so.0.26.0"
+    },
+    "usr/lib/libwayland-server.so.0.26.0": {
+      "group": "inactive_graphics",
+      "sha256": "07ae31ad89faabf54d3d500504f0cf9e1ffbe529bdfb3a1b1dccaa13cefabdea",
+      "bytes": 200520
+    },
+    "usr/lib/libxcb-composite.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-composite.so.0.0.0"
+    },
+    "usr/lib/libxcb-composite.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-composite.so.0.0.0"
+    },
+    "usr/lib/libxcb-composite.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "2da7717c05f5b94d5119ff1cbbe1120f213b314806110f4d964e609044ddaa77",
+      "bytes": 67272
+    },
+    "usr/lib/libxcb-damage.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-damage.so.0.0.0"
+    },
+    "usr/lib/libxcb-damage.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-damage.so.0.0.0"
+    },
+    "usr/lib/libxcb-damage.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "bcba40f2ed2dd9b48e8113eaaf2437d1142852f2091538a0308bbc1df755d615",
+      "bytes": 67272
+    },
+    "usr/lib/libxcb-dbe.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-dbe.so.0.0.0"
+    },
+    "usr/lib/libxcb-dbe.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-dbe.so.0.0.0"
+    },
+    "usr/lib/libxcb-dbe.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "e73285a5d7b212fec5c5406d9be5c1b1ca92dfeaed6e576ec2719f5c6ba6c89e",
+      "bytes": 67288
+    },
+    "usr/lib/libxcb-dpms.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-dpms.so.0.0.0"
+    },
+    "usr/lib/libxcb-dpms.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-dpms.so.0.0.0"
+    },
+    "usr/lib/libxcb-dpms.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "3f124c094913a8eb94c34777b3726014f9972063d8abd177f05420b8730f4477",
+      "bytes": 67272
+    },
+    "usr/lib/libxcb-dri2.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-dri2.so.0.0.0"
+    },
+    "usr/lib/libxcb-dri2.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-dri2.so.0.0.0"
+    },
+    "usr/lib/libxcb-dri2.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "a1da46e66760dd0afd19522bd868f238dfc34cef75f22aaa3462df2034173505",
+      "bytes": 67288
+    },
+    "usr/lib/libxcb-dri3.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-dri3.so.0.1.0"
+    },
+    "usr/lib/libxcb-dri3.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-dri3.so.0.1.0"
+    },
+    "usr/lib/libxcb-dri3.so.0.1.0": {
+      "group": "inactive_graphics",
+      "sha256": "44522fc9152a83ae36b16b71978ec9edbd85990bda4a75d435d8d54e504ac2fc",
+      "bytes": 67480
+    },
+    "usr/lib/libxcb-glx.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-glx.so.0.0.0"
+    },
+    "usr/lib/libxcb-glx.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-glx.so.0.0.0"
+    },
+    "usr/lib/libxcb-glx.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "f416697278892b403d6311a27fd02abb74be43a086069598861f5c91441b0fd7",
+      "bytes": 132840
+    },
+    "usr/lib/libxcb-present.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-present.so.0.0.0"
+    },
+    "usr/lib/libxcb-present.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-present.so.0.0.0"
+    },
+    "usr/lib/libxcb-present.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "df0295ab600b7a879b84bfc76a3e5b4ba3c86634f4ccc34032d32c8cc48a4d0b",
+      "bytes": 67272
+    },
+    "usr/lib/libxcb-randr.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-randr.so.0.1.0"
+    },
+    "usr/lib/libxcb-randr.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-randr.so.0.1.0"
+    },
+    "usr/lib/libxcb-randr.so.0.1.0": {
+      "group": "inactive_graphics",
+      "sha256": "e489ae58d02f129270974e0b55c463877eb7bbfc6a61cc28d554b5a4501ff4a5",
+      "bytes": 67520
+    },
+    "usr/lib/libxcb-record.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-record.so.0.0.0"
+    },
+    "usr/lib/libxcb-record.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-record.so.0.0.0"
+    },
+    "usr/lib/libxcb-record.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "199800cd616434c70f6d7b3f5b9ce30733af703337f324a4d512a49e491b9ba0",
+      "bytes": 67304
+    },
+    "usr/lib/libxcb-render.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-render.so.0.0.0"
+    },
+    "usr/lib/libxcb-render.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-render.so.0.0.0"
+    },
+    "usr/lib/libxcb-render.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "c129ce8d96e65b3fb6550359213121be9e33a8abed01f80f392760deceba941e",
+      "bytes": 67656
+    },
+    "usr/lib/libxcb-res.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-res.so.0.0.0"
+    },
+    "usr/lib/libxcb-res.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-res.so.0.0.0"
+    },
+    "usr/lib/libxcb-res.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "d23e787f7ba7d439e207d8386077333a37560e11913f19f0c4ecc345b84560a5",
+      "bytes": 67304
+    },
+    "usr/lib/libxcb-shape.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-shape.so.0.0.0"
+    },
+    "usr/lib/libxcb-shape.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-shape.so.0.0.0"
+    },
+    "usr/lib/libxcb-shape.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "19f11520427da1f02ec3ec2f04fa3fd550ad6747e3cbe8d63327a5c39fc7c568",
+      "bytes": 67272
+    },
+    "usr/lib/libxcb-shm.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-shm.so.0.0.0"
+    },
+    "usr/lib/libxcb-shm.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-shm.so.0.0.0"
+    },
+    "usr/lib/libxcb-shm.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "1f91a7b8810a3f3832658c893c4f54ce759c84260d0c4dd1256ae4491dc48493",
+      "bytes": 67288
+    },
+    "usr/lib/libxcb-sync.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-sync.so.1.0.0"
+    },
+    "usr/lib/libxcb-sync.so.1": {
+      "group": "inactive_graphics",
+      "link": "libxcb-sync.so.1.0.0"
+    },
+    "usr/lib/libxcb-sync.so.1.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "f1642aa813f53197d1d36154a16a88190d963312b326210cea044eb73f6a73d6",
+      "bytes": 67520
+    },
+    "usr/lib/libxcb-xf86dri.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xf86dri.so.0.0.0"
+    },
+    "usr/lib/libxcb-xf86dri.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xf86dri.so.0.0.0"
+    },
+    "usr/lib/libxcb-xf86dri.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "fb5ab3355ab3ea9e14a958a99bb49aecaaae70e4213a2417f128303b9a70f633",
+      "bytes": 67288
+    },
+    "usr/lib/libxcb-xfixes.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xfixes.so.0.0.0"
+    },
+    "usr/lib/libxcb-xfixes.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xfixes.so.0.0.0"
+    },
+    "usr/lib/libxcb-xfixes.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "42ce10f4c522a00af6a6cb565d9433faafc8d2f8477c17f136eda3fd9e6a7a96",
+      "bytes": 67280
+    },
+    "usr/lib/libxcb-xinerama.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xinerama.so.0.0.0"
+    },
+    "usr/lib/libxcb-xinerama.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xinerama.so.0.0.0"
+    },
+    "usr/lib/libxcb-xinerama.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "6d479aaf7e43b3ca33c357a423390777eda3e2e7217175f919c58a76089420e6",
+      "bytes": 67272
+    },
+    "usr/lib/libxcb-xinput.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xinput.so.0.1.0"
+    },
+    "usr/lib/libxcb-xinput.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xinput.so.0.1.0"
+    },
+    "usr/lib/libxcb-xinput.so.0.1.0": {
+      "group": "inactive_graphics",
+      "sha256": "444b33cef4fa9ac357d649690fdbf20baeaf240d3301ce58d2f1438c7d38cb95",
+      "bytes": 133848
+    },
+    "usr/lib/libxcb-xkb.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xkb.so.1.0.0"
+    },
+    "usr/lib/libxcb-xkb.so.1": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xkb.so.1.0.0"
+    },
+    "usr/lib/libxcb-xkb.so.1.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "b4ebfad35c4a12b41798623a91d04586a669c8d3971036b421dd933bb1576245",
+      "bytes": 133480
+    },
+    "usr/lib/libxcb-xtest.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xtest.so.0.0.0"
+    },
+    "usr/lib/libxcb-xtest.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xtest.so.0.0.0"
+    },
+    "usr/lib/libxcb-xtest.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "b9708a6eca0f5e6e31abed6572c5cc622b01ddb9a0fa2222e4d77d15e22cff56",
+      "bytes": 67272
+    },
+    "usr/lib/libxcb-xv.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xv.so.0.0.0"
+    },
+    "usr/lib/libxcb-xv.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxcb-xv.so.0.0.0"
+    },
+    "usr/lib/libxcb-xv.so.0.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "5b4094ca14e0434f4c9af6631c9610686ee58f10b675413d95d50dca1af5583c",
+      "bytes": 67368
+    },
+    "usr/lib/libxcb.so": {
+      "group": "inactive_graphics",
+      "link": "libxcb.so.1.1.0"
+    },
+    "usr/lib/libxcb.so.1": {
+      "group": "inactive_graphics",
+      "link": "libxcb.so.1.1.0"
+    },
+    "usr/lib/libxcb.so.1.1.0": {
+      "group": "inactive_graphics",
+      "sha256": "b6a67e9cdf690d5d3f48c80adf46e745f17ee3359a12b087fe14960edeaeb694",
+      "bytes": 199392
+    },
+    "usr/lib/libxkbcommon-x11.so": {
+      "group": "inactive_graphics",
+      "link": "libxkbcommon-x11.so.0"
+    },
+    "usr/lib/libxkbcommon-x11.so.0": {
+      "group": "inactive_graphics",
+      "link": "libxkbcommon-x11.so.0.8.0"
+    },
+    "usr/lib/libxkbcommon-x11.so.0.8.0": {
+      "group": "inactive_graphics",
+      "sha256": "4824e77e20e21a11891ffda150f27ee2f7c968c34b9691fe87cfda867fc9757a",
+      "bytes": 68200
+    },
+    "usr/lib/libxshmfence.so": {
+      "group": "inactive_graphics",
+      "link": "libxshmfence.so.1.0.0"
+    },
+    "usr/lib/libxshmfence.so.1": {
+      "group": "inactive_graphics",
+      "link": "libxshmfence.so.1.0.0"
+    },
+    "usr/lib/libxshmfence.so.1.0.0": {
+      "group": "inactive_graphics",
+      "sha256": "7ca7c803675e07219afd0ea35e77cd602bfcf5a7034a235597759c8f638e7dcf",
+      "bytes": 67416
+    },
+    "usr/lib/xkbcommon/xkbcli-dump-keymap-wayland": {
+      "group": "inactive_graphics",
+      "sha256": "07f21b104d3e24a193abed5824d419f3d6791ccd0d27cfbae3ea673105ce7dbf",
+      "bytes": 68528
+    },
+    "usr/lib/xkbcommon/xkbcli-dump-keymap-x11": {
+      "group": "inactive_graphics",
+      "sha256": "928cf5f5f12bad5c91d27a6cd89c9a19a5970c8fc7bde0c49648ba5e2fa0cf3e",
+      "bytes": 67720
+    },
+    "usr/lib/xkbcommon/xkbcli-interactive-wayland": {
+      "group": "inactive_graphics",
+      "sha256": "44c829bca210567ec8bcd27f1dadec7c4e43828f88c0e5b3a8acc4608279fc69",
+      "bytes": 68528
+    },
+    "usr/lib/xkbcommon/xkbcli-interactive-x11": {
+      "group": "inactive_graphics",
+      "sha256": "9f3219967877d71f3905d477f54675d88846659894250607d8d95c6c7fb50760",
+      "bytes": 68144
+    },
+    "usr/share/glvnd/egl_vendor.d/50_mesa.json": {
+      "group": "inactive_graphics",
+      "sha256": "cd3881df4227c13ca7f9cfe6c78820f21d5f7a00a41b299214f6f827e63be369",
+      "bytes": 105
+    },
+    "usr/share/vulkan/implicit_layer.d/VkLayer_window_system_integration.json": {
+      "group": "inactive_graphics",
+      "sha256": "36b03fd6bf221a0a61b1689a8fd49d7e120547f2ee81e70a90245e1d32ce2c65",
+      "bytes": 2277
+    }
+  }
+}

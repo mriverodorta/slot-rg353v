@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="480" viewBox="0 0 640 480">
+ <defs><radialGradient id="power"><stop stop-color="#ffb8bb"/><stop offset=".12" stop-color="#ff969d"/><stop offset=".22" stop-color="#ec4555" stop-opacity=".8"/><stop offset=".55" stop-color="#bf1729" stop-opacity=".25"/><stop offset="1" stop-color="#8a1020" stop-opacity="0"/></radialGradient></defs>
+ <path fill="#000" fill-rule="evenodd" d="M0 0H640V480H0Z __WINDOW__"/>
+ <circle cx="__POWER_X__" cy="232" r="__GLOW_R__" fill="url(#power)"/>
+ <circle cx="__POWER_X__" cy="232" r="2.5" fill="#ffc4c8"/>
+ 
+</svg>

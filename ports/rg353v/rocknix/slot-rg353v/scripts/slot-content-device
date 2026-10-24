@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+[ "$#" = 2 ] || exit 1
+boot=$1
+storage=$2
+case "$boot" in /dev/mmcblk*p1) disk=${boot%p1} ;; *) exit 1 ;; esac
+number=${disk#/dev/mmcblk}
+case "$number" in ''|*[!0-9]*) exit 1 ;; esac
+[ "$storage" = "${disk}p2" ] || exit 1
+printf '%s\n' "${disk}p3"

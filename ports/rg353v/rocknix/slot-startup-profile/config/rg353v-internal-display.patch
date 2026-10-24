@@ -1,0 +1,33 @@
+--- a/arch/arm64/boot/dts/rockchip/rk3566-anbernic-rg353v.dts
++++ b/arch/arm64/boot/dts/rockchip/rk3566-anbernic-rg353v.dts
+@@ -123,3 +123,30 @@
+ 		linux,code = <BTN_TR2>;
+ 	};
+ };
++
++/* Slot RG353V appliance: use only the internal DSI panel and RK817 audio. */
++/ {
++	hdmi-con {
++		status = "disabled";
++	};
++};
++
++&hdmi {
++	status = "disabled";
++};
++
++&hdmi_sound {
++	status = "disabled";
++};
++
++&i2s0_8ch {
++	status = "disabled";
++};
++
++&hdmi_in_vp0 {
++	/delete-property/ remote-endpoint;
++};
++
++&vp0_out_hdmi {
++	/delete-property/ remote-endpoint;
++};

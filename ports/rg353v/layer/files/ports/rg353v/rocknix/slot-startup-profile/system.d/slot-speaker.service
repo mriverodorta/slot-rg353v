@@ -1,0 +1,11 @@
+[Unit]
+Description=Slot RK817 speaker/headphone routing
+After=rocknix-autostart.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/slot-speaker-start
+ExecStopPost=/bin/rm -f /run/slot-speaker.ready
+Restart=on-failure
+RestartSec=1
+TimeoutStartSec=10

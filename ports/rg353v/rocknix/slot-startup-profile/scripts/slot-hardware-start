@@ -1,0 +1,217 @@
+#!/bin/bash
+set -ae
+. /etc/profile.d/001-functions
+export QUIRK_DEVICE="Anbernic RG353V"
+model=/sys/firmware/devicetree/base/compatible
+panel=/sys/firmware/devicetree/base/dsi@fe060000/panel@0/compatible
+tr '\0' '\n' <"$model" | grep -qx 'anbernic,rg353v'
+tr '\0' '\n' <"$panel" | grep -qx 'anbernic,rg353v-panel-v2'
+# Only the fixed devfreq node is needed on the shelf path. Compatibility
+# profiles are prepared by the deferred service for legacy administrative tools.
+GPU_FREQ=/sys/devices/platform/fde60000.gpu/devfreq/fde60000.gpu
+log=/var/log/boot.log
+# One acknowledged timestamp writer avoids loading the same program 26 times.
+# Keep the external-command fallback if the writer exits or misses its deadline.
+marks_pid=''; marks_write=''; marks_read=''
+marks_dead=0
+trap 'marks_dead=1' PIPE
+finish_marks() {
+  if [ -n "$marks_write" ]; then exec {marks_write}>&-; marks_write=''; fi
+  if [ -n "$marks_read" ]; then exec {marks_read}<&-; marks_read=''; fi
+  if [ -n "$marks_pid" ]; then
+    kill "$marks_pid" 2>/dev/null || :
+    wait "$marks_pid" 2>/dev/null || :
+  fi
+  marks_pid=''
+}
+trap finish_marks EXIT
+start_marks() {
+  coproc SLOT_MARKS { exec /usr/bin/slot-splash --stream; }
+  marks_pid=${SLOT_MARKS_PID:-}
+  local raw_write=${SLOT_MARKS[1]:-} raw_read=${SLOT_MARKS[0]:-}
+  if [ -n "$raw_write" ] && [ -n "$raw_read" ] &&
+      exec {marks_write}>&"$raw_write" {marks_read}<&"$raw_read"; then
+    exec {raw_write}>&- {raw_read}<&-
+  else
+    finish_marks
+  fi
+}
+mark() {
+  local ack
+  if [ -n "$marks_pid" ] && [ "$marks_dead" = 0 ] &&
+      printf '%s %s\n' "$1" "$2" >&"$marks_write" 2>/dev/null &&
+      read -r -t 1 ack <&"$marks_read" && [ "$ack" = ok ]; then
+    return 0
+  fi
+  finish_marks
+  /usr/bin/slot-splash "$1" "$2" || :
+}
+step() {
+  local name=$1; shift
+  mark --begin "hardware-$name"
+  if ! "$@" >>"$log" 2>&1; then
+    echo "Slot hardware step failed: $name" >>"$log"
+  fi
+  mark --event "hardware-$name"
+}
+# Parse once; never evaluate configuration values as shell code. This retains
+# get_setting's system.key -> key -> global.key precedence and first match.
+declare -A settings=()
+load_settings() {
+  settings=()
+  local key value
+  while IFS='=' read -r key value || [ -n "$key" ]; do
+    [[ "$key" = \#* || -z "$key" || "${settings[$key]+present}" ]] && continue
+    settings["$key"]=$value
+  done <"$J_CONF"
+}
+get_setting() {
+  local key
+  for key in "system.$1" "$1" "global.$1"; do
+    if [ -n "${settings[$key]:-}" ]; then
+      printf '%s\n' "${settings[$key]}"
+      return
+    fi
+  done
+}
+set_cpu() {
+  printf '%s\n' "$1" >/sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+}
+set_gpu() {
+  # This RK3566 devfreq driver exposes exactly these three governors.
+  case "$1" in
+    auto|default|ondemand|simple_ondemand) echo simple_ondemand >"${GPU_FREQ}/governor" ;;
+    performance|powersave) printf '%s\n' "$1" >"${GPU_FREQ}/governor" ;;
+    *) echo "Unsupported RG353V GPU governor: $1" >&2; return 1 ;;
+  esac
+}
+set_cpu performance || :
+configure_runtime() {
+  mkdir -p /tmp/cache /var/run/0-runtime-dir
+  chmod 0700 /var/run/0-runtime-dir
+  # Normal settings are already validated/persisted. Retain the original repair
+  # path for binary, empty, missing or incomplete configuration files.
+  if ! LC_ALL=C grep -qI '' "$J_CONF" || ! grep -q system.hostname "$J_CONF"; then
+    /usr/bin/chksysconfig verify
+  fi
+  load_settings
+}
+configure_gpu_driver() {
+  # Early preparation (or udev) may already have loaded this exact driver.
+  # A module entry alone is insufficient: require its real character device.
+  if [ ! -d /sys/module/mali_kbase ] || [ ! -c /dev/mali0 ]; then
+    modprobe mali_kbase
+  fi
+}
+configure_thermal() {
+  echo 83000 >/sys/devices/virtual/thermal/thermal_zone0/trip_point_0_temp
+  echo 88000 >/sys/devices/virtual/thermal/thermal_zone0/trip_point_1_temp
+  echo 80000 >/sys/devices/virtual/thermal/thermal_zone1/trip_point_0_temp
+  echo 88000 >/sys/devices/virtual/thermal/thermal_zone1/trip_point_1_temp
+}
+configure_gpu() { echo 400000000 >"${GPU_FREQ}/min_freq"; }
+configure_display() {
+  local percent maximum
+  percent=$(get_setting display.brightness)
+  if [[ ! "$percent" =~ ^[0-9]+$ || ${#percent} -gt 9 ]] || ((10#$percent < 5)); then percent=10; fi
+  percent=$((10#$percent))
+  ((percent <= 100)) || percent=100
+  read -r maximum </sys/class/backlight/backlight/max_brightness
+  printf '%s\n' "$((percent * maximum / 100))" >/sys/class/backlight/backlight/brightness
+}
+configure_performance() {
+  local threads gpu core online
+  threads=$(get_setting system.threads)
+  case "$threads" in
+    default) ;;
+    *)
+      case "$threads" in
+        ''|all) threads=4 ;;
+        0) threads=1 ;;
+        1|2|3|4) ;;
+        *) echo "Unsupported RG353V thread count: $threads" >&2; return 1 ;;
+      esac
+      for core in 1 2 3; do
+        online=0
+        ((core >= threads)) || online=1
+        printf '%s\n' "$online" >"/sys/devices/system/cpu/cpu$core/online"
+      done
+      ;;
+  esac
+  gpu=$(get_setting system.gpuperf)
+  [ -z "$gpu" ] || set_gpu "$gpu"
+}
+configure_sleep() {
+  # On this board the default is mem. Persist it only on first setup; normal
+  # boots neither rediscover suspend modes nor restart logind.
+  if [ -z "$(get_setting system.suspendmode)" ]; then
+    mkdir -p /storage/.config/sleep.conf.d
+    printf '[Sleep]\nAllowSuspend=yes\nSuspendState=mem standby freeze\n' > /storage/.config/sleep.conf.d/sleep.conf
+    set_setting system.suspendmode mem
+    systemctl try-restart systemd-logind.service
+  fi
+}
+prepare_compatibility_profiles() {
+  mkdir -p /storage/.config/profile.d
+  for profile in /usr/share/slot/hardware/profile.d/*; do
+    target=/storage/.config/profile.d/${profile##*/}
+    if ! cmp -s "$profile" "$target"; then
+      cp "$profile" "$target"
+    fi
+  done
+}
+configure_upgrade() {
+  local hint=''
+  [ ! -f /storage/.boot.hint ] || read -r hint </storage/.boot.hint || :
+  if [ "$hint" = UPDATE ]; then
+    prepare_compatibility_profiles
+    /usr/lib/autostart/common/003-upgrade
+  fi
+}
+configure_turbo() {
+  local enabled
+  enabled=$(get_setting enable.turbo-mode)
+  if [ -z "$enabled" ]; then enabled=0; set_setting enable.turbo-mode 0; fi
+  printf '%s\n' "$enabled" >/sys/devices/system/cpu/cpufreq/boost
+}
+configure_export() {
+  local target=/storage/.config/profile.d/999-export
+  [ "$target" -ef /etc/profile.d/999-export ] || ln -sf /etc/profile.d/999-export "$target"
+}
+configure_rumble() {
+  local path=/sys/devices/platform/rocknix-singleadc-joypad/rumble_enable
+  local enabled
+  if [ -f "$path" ]; then
+    enabled=$(get_setting rumble.enabled)
+    if [ -z "$enabled" ]; then
+      set_setting rumble.enabled 1
+    else
+      printf '%s\n' "$enabled" >"$path"
+    fi
+  fi
+}
+configure_internal_display() {
+  echo 0 > /run/drmMode
+  echo 1 > /run/drmConn
+}
+start_marks || :
+step common-001-setup configure_runtime
+step platform-055-thermal-trips configure_thermal
+step common-003-gpudriver configure_gpu_driver
+test -c /dev/mali0
+step platform-060-game_settings configure_gpu
+step common-003-upgrade configure_upgrade
+step common-006-display configure_display
+step common-008-perfmode configure_performance
+step common-009-sleepmode configure_sleep
+step common-020-configs true # Optional ES configuration sync is deferred.
+step common-020-rumble configure_rumble
+step internal-display configure_internal_display
+step common-095-turbo-mode configure_turbo
+step common-999-export configure_export
+governor=$(get_setting system.cpugovernor)
+if [ -z "$governor" ]; then
+  governor=ondemand
+  set_setting system.cpugovernor "$governor"
+fi
+/usr/bin/slot-boot-boost defer "$governor" >>"$log" 2>&1 || set_cpu "$governor" >>"$log" 2>&1 || :

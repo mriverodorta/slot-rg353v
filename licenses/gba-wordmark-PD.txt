@@ -1,0 +1,15 @@
+Game Boy Advance wordmark
+
+Source: https://commons.wikimedia.org/wiki/File:Game_Boy_Advance_logo.svg
+Original vector: https://upload.wikimedia.org/wikipedia/commons/5/50/Game_Boy_Advance_logo.svg
+Retrieved: 2026-10-17
+Contributors: original SVG conversion by Nuno Nogueira (Nmnogueira); current
+original-vector upload by JaJaWa, 2017-05-15; source EPS from Brands of the World.
+
+Wikimedia Commons marks this simple text logo as public domain (PD-textlogo).
+Nintendo retains its trademarks. This asset is used to identify the emulated
+console; no endorsement is implied.
+
+Changes: removed the blue surrounding silhouette, retained the outlined white
+letter shapes, recolored them silver, and tightened the viewBox. The border
+renderer rasterizes these paths directly at their final display size.

@@ -1,0 +1,15 @@
+[Unit]
+Description=Optional measured RG353V graphics page-cache hints
+DefaultDependencies=no
+After=systemd-remount-fs.service
+ConditionPathExists=/usr/share/slot/hardware/graphics-pages.list
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/slot-graphics-prefetch /usr/share/slot/hardware/graphics-pages.list
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=5
+
+[Install]
+WantedBy=sysinit.target

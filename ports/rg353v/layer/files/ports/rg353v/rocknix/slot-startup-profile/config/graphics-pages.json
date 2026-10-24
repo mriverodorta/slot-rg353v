@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "page_bytes": 4096,
+  "profile_sha256": "09582d9585d6419061d55747e50c65594c0e7bac13e18b30ca8e5e7a724b6fad",
+  "libraries": {
+    "/usr/lib/libgbm.so.1": {
+      "bytes": 131849,
+      "sha256": "b693e596edd550d76f9e0234bf09171641f19d78a5755c1f6ba19740386c8a11"
+    },
+    "/usr/lib/libmali.so.1": {
+      "bytes": 59855128,
+      "sha256": "605e3a5caf1be62bb48d97b1168434257355d56db5e3be9b515cfa742c173118"
+    },
+    "/usr/lib/libSDL2-2.0.so.0": {
+      "bytes": 1469968,
+      "sha256": "240e9d610e13ec891797d943794a931eb2491cb3e874a72bd4ae06ffba98cd35"
+    }
+  },
+  "method": "Resident file-page ranges after a fresh RG353V v2 shelf boot. Optional advisory reads only; file size/header pin rechecked natively, full library hashes checked when composing the image."
+}

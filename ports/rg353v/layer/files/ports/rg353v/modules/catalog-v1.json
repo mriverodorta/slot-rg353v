@@ -1,0 +1,340 @@
+{
+  "schema": 1,
+  "id": "rg353v-modules-v1",
+  "modules": [
+    {
+      "id": "emulator-mgba",
+      "label": "mGBA (GB / GBC / GBA)",
+      "packages": [],
+      "paths": [
+        "usr/share/slot/System/mgba_libretro.so",
+        "usr/share/slot/System/licenses/core-sources/mgba*",
+        "usr/share/slot/System/licenses/mgba-*"
+      ],
+      "requires": [],
+      "description": "Play Game Boy, Game Boy Color and Game Boy Advance games. Recommended default emulator. Select at least one emulator.",
+      "group": "Emulators"
+    },
+    {
+      "id": "emulator-gpsp",
+      "label": "gpSP (GBA)",
+      "packages": [],
+      "paths": [
+        "usr/share/slot/System/gpsp_libretro.so",
+        "usr/share/slot/System/licenses/core-sources/gpsp*",
+        "usr/share/slot/System/licenses/gpsp-*"
+      ],
+      "requires": [],
+      "description": "An alternative emulator for Game Boy Advance games only. Without mGBA, Game Boy and Game Boy Color systems are hidden.",
+      "group": "Emulators"
+    },
+    {
+      "id": "wifi",
+      "label": "Wi-Fi",
+      "packages": [
+        "networkmanager",
+        "slot-wpa-supplicant",
+        "iwd"
+      ],
+      "paths": [
+        "usr/bin/slot-wifi-*",
+        "usr/bin/slot-network-state",
+        "usr/bin/slot-wpa-cli",
+        "usr/config/autostart/091-slot-wifi-diagnostics",
+        "usr/share/slot/networkmanager-backend.conf",
+        "usr/config/slot-iwd/**",
+        "usr/lib/systemd/system/slot-wifi-*",
+        "usr/lib/systemd/system/slot-wpa-*",
+        "usr/lib/systemd/system/NetworkManager*",
+        "usr/lib/systemd/system/iwd*",
+        "usr/lib/systemd/system/systemd-resolved*",
+        "usr/lib/systemd/system/network-base*",
+        "usr/lib/systemd/systemd-resolved",
+        "usr/lib/systemd/resolvconf",
+        "usr/lib/kernel-overlays/base/lib/firmware/rtw88/**",
+        "usr/lib/kernel-overlays/base/lib/modules/*/kernel/drivers/net/wireless/realtek/rtw88/**",
+        "usr/lib/modprobe.d/rtw88.conf"
+      ],
+      "requires": [],
+      "description": "Connect to wireless networks for transfers and online features. Normally starts off each boot; enable it when needed.",
+      "group": "Connections & Transfers"
+    },
+    {
+      "id": "ssh",
+      "label": "SSH",
+      "packages": [
+        "openssh"
+      ],
+      "paths": [
+        "usr/bin/slot-ssh",
+        "usr/share/slot/System/slot-ssh-ui",
+        "usr/lib/autostart/daemons/001-ssh",
+        "usr/lib/systemd/system/sshd*"
+      ],
+      "requires": [],
+      "description": "Control the handheld from a computer using a terminal. Needs Wi-Fi or USB Networking. Remembers your SSH switch within the current boot when a connection returns.",
+      "group": "Connections & Transfers"
+    },
+    {
+      "id": "sharing",
+      "label": "File Sharing (SMB)",
+      "packages": [
+        "ksmbd-tools"
+      ],
+      "paths": [
+        "usr/bin/slot-sharing",
+        "usr/bin/slot-ksmbd",
+        "usr/share/slot/System/slot-sharing-ui",
+        "usr/share/slot/ksmbd.conf",
+        "usr/lib/systemd/system/slot-sharing*",
+        "usr/lib/kernel-overlays/base/lib/modules/*/kernel/fs/smb/**",
+        "usr/lib/kernel-overlays/base/lib/modules/*/kernel/fs/nls/nls_ucs2_utils.ko"
+      ],
+      "requires": [],
+      "description": "Copy games and saves using your computer's file manager over the network. Needs Wi-Fi or USB Networking.",
+      "group": "Connections & Transfers"
+    },
+    {
+      "id": "usb-storage",
+      "label": "USB Storage",
+      "packages": [],
+      "paths": [
+        "usr/bin/slot-usb-storage",
+        "usr/lib/systemd/system/slot-usb-storage.service",
+        "usr/lib/kernel-overlays/base/lib/modules/*/kernel/drivers/usb/gadget/function/usb_f_mass_storage.ko",
+        "usr/sbin/fsck.exfat",
+        "usr/bin/fsck.exfat",
+        "sbin/fsck.exfat"
+      ],
+      "requires": [],
+      "description": "Show the games partition as a USB drive on your computer. Safely eject it before returning to Slot.",
+      "group": "Connections & Transfers"
+    },
+    {
+      "id": "usb-network",
+      "label": "USB Networking",
+      "packages": [],
+      "paths": [
+        "usr/bin/slot-usb-network",
+        "usr/lib/systemd/system/slot-usb-network.service",
+        "usr/lib/udev/rules.d/75-slot-usb-network.rules",
+        "usr/sbin/udhcpd",
+        "usr/lib/kernel-overlays/base/lib/modules/*/kernel/drivers/usb/gadget/function/usb_f_ecm.ko",
+        "usr/lib/kernel-overlays/base/lib/modules/*/kernel/drivers/usb/gadget/function/u_ether.ko",
+        "usr/bin/slot-usb-network-dhcp",
+        "usr/sbin/udhcpc",
+        "usr/lib/kernel-overlays/base/lib/modules/*/kernel/drivers/usb/gadget/function/usb_f_ncm.ko"
+      ],
+      "requires": [],
+      "description": "Connect by USB to Windows 11, macOS or Linux. Add SSH or File Sharing for access. Internet via USB also needs sharing enabled on the computer.",
+      "group": "Connections & Transfers"
+    },
+    {
+      "id": "external-sd",
+      "label": "Games from TF1 / TF2",
+      "packages": [],
+      "paths": [
+        "usr/bin/slot-sd-library",
+        "usr/bin/slot-sd-library-boot",
+        "usr/lib/systemd/system/slot-sd-library.service"
+      ],
+      "requires": [],
+      "description": "Play from TF1 or TF2; inserted cards appear automatically on the shelf. Choose System or Game storage for saves and states. Use the Slot folder layout.",
+      "group": "Connections & Transfers"
+    },
+    {
+      "id": "enhanced-audio",
+      "label": "Enhanced Audio",
+      "packages": [],
+      "paths": [],
+      "requires": [],
+      "builtin": true,
+      "description": "Optional 48 kHz resampling. Adds an Audio setting, initially Off. Uses a little more CPU. Changes apply the next time you open a game.",
+      "group": "Gameplay & Appearance"
+    },
+    {
+      "id": "filters",
+      "label": "Shaders and Color Filters",
+      "packages": [],
+      "paths": [],
+      "requires": [],
+      "builtin": true,
+      "description": "Choose per-console shaders, color correction and frame blending. Some effects use more CPU or GPU power.",
+      "group": "Gameplay & Appearance"
+    },
+    {
+      "id": "overlays",
+      "label": "Console Overlays",
+      "packages": [],
+      "paths": [],
+      "requires": [],
+      "builtin": true,
+      "description": "Add console borders around the game, including Slot and Perfect styles. Available styles depend on the system.",
+      "group": "Gameplay & Appearance"
+    },
+    {
+      "id": "frame-counter",
+      "label": "Frame Counter",
+      "packages": [],
+      "paths": [],
+      "requires": [],
+      "builtin": true,
+      "description": "Show a small frame-rate number while playing. Toggle it with Select + X.",
+      "group": "Gameplay & Appearance"
+    },
+    {
+      "id": "screenshots",
+      "label": "Screenshots",
+      "packages": [],
+      "paths": [],
+      "requires": [],
+      "builtin": true,
+      "description": "Capture games with Select + Start. Configure shaders, screen filters and overlays in System. Copy PNG images from Screenshots using a card reader or USB Storage; Gallery is optional.",
+      "group": "Gameplay & Appearance"
+    },
+    {
+      "id": "gallery",
+      "label": "Gallery",
+      "packages": [],
+      "paths": [],
+      "requires": [],
+      "builtin": true,
+      "description": "Browse screenshots on the handheld. Sort by game, date or platform, view full screen and delete images with confirmation. Screenshots capture is a separate optional feature.",
+      "group": "Gameplay & Appearance"
+    },
+    {
+      "id": "rewind",
+      "label": "Rewind",
+      "packages": [],
+      "paths": [],
+      "requires": [],
+      "builtin": true,
+      "description": "Move backward through recent gameplay by holding L2. Uses extra memory and processing while recording.",
+      "group": "Gameplay & Appearance"
+    },
+    {
+      "id": "runahead",
+      "label": "Run-Ahead",
+      "packages": [],
+      "paths": [],
+      "requires": [],
+      "builtin": true,
+      "description": "Reduce input delay in GBA games using mGBA. Uses more CPU and can reduce speed in demanding games. Unavailable with gpSP only.",
+      "group": "Gameplay & Appearance",
+      "available_with": [
+        "emulator-mgba"
+      ]
+    },
+    {
+      "id": "network-time",
+      "label": "Automatic Network Time",
+      "packages": [],
+      "paths": [
+        "usr/lib/systemd/systemd-timesyncd",
+        "usr/lib/systemd/system/systemd-timesyncd*",
+        "etc/systemd/timesyncd.conf",
+        "usr/lib/autostart/common/*ntp*",
+        "usr/sbin/systemd-timesyncd-setup",
+        "usr/config/timesyncd.conf.d/**"
+      ],
+      "requires": [],
+      "description": "Set the clock from the internet using Wi-Fi or Internet via USB. USB needs internet sharing on the computer. Manual clock setting stays available.",
+      "group": "System & Development",
+      "requires_any": [
+        [
+          "wifi",
+          "usb-network"
+        ]
+      ]
+    },
+    {
+      "id": "updates",
+      "label": "OTA Updates",
+      "packages": [],
+      "paths": [
+        "usr/bin/slot-ota",
+        "usr/share/slot/System/slot-ota-ui",
+        "usr/share/slot/System/slot-update",
+        "usr/share/slot/System/slot-os-update",
+        "usr/share/slot/update-feed.json",
+        "usr/share/slot/update-keys/**",
+        "usr/bin/curl",
+        "usr/bin/wget"
+      ],
+      "requires": [],
+      "description": "Download small signed updates in order, continuing after restarts. Preserves installed features and a rollback version. Needs internet access.",
+      "group": "System & Development"
+    },
+    {
+      "id": "diagnostics",
+      "label": "Diagnostics",
+      "packages": [],
+      "paths": [
+        "usr/bin/slot-diagnostics",
+        "usr/share/slot/System/slot-diagnostics-ui"
+      ],
+      "requires": [],
+      "description": "View available RAM, temperature, storage, versions and service status. Readings refresh while Diagnostics is open.",
+      "group": "System & Development"
+    },
+    {
+      "id": "storage-tools",
+      "label": "SD Storage Check / Repair",
+      "packages": [],
+      "paths": [
+        "usr/bin/slot-storage-tools",
+        "usr/share/slot/System/slot-storage-tools-ui",
+        "usr/sbin/fsck.exfat",
+        "usr/sbin/fsck.fat",
+        "usr/sbin/fsck.vfat",
+        "usr/sbin/fsck.msdos",
+        "usr/sbin/dosfsck",
+        "usr/bin/fsck.exfat",
+        "usr/bin/fsck.fat",
+        "sbin/fsck.exfat",
+        "sbin/fsck.fat",
+        "sbin/fsck.vfat",
+        "sbin/fsck.msdos",
+        "sbin/dosfsck"
+      ],
+      "requires": [],
+      "description": "Manually check or repair SD games storage. Repair needs confirmation and changes filesystem metadata. Back up first. Internal eMMC and system partitions stay protected.",
+      "group": "System & Development"
+    },
+    {
+      "id": "schedutil-governor",
+      "label": "Schedutil Governor",
+      "packages": [],
+      "paths": [],
+      "requires": [],
+      "builtin": true,
+      "description": "Add a System switch for an alternative CPU power policy. Initially Off: ondemand 20 ms stays the default. Battery savings vary by game. CPU speed limits stay unchanged.",
+      "group": "System & Development"
+    },
+    {
+      "id": "profilers",
+      "label": "Development Profilers",
+      "packages": [],
+      "paths": [
+        "usr/bin/slot-boot-profile",
+        "usr/bin/btop",
+        "usr/bin/perf",
+        "usr/share/btop/**",
+        "usr/local/share/btop/**"
+      ],
+      "requires": [],
+      "description": "Add boot-timing and process-usage tools for development. Recording is enabled separately when investigating an issue.",
+      "group": "System & Development"
+    },
+    {
+      "id": "developer",
+      "label": "Developer Mode",
+      "packages": [],
+      "paths": [],
+      "requires": [],
+      "builtin": true,
+      "description": "Add a Developer Mode switch that keeps network access and SSH available across restarts. Requires SSH and Wi-Fi or USB Networking.",
+      "group": "System & Development"
+    }
+  ]
+}

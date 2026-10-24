@@ -1,0 +1,117 @@
+{
+  "date": "2026-10-23",
+  "clock": "Linux entry to first shelf swap",
+  "target": "Earlier 4.5\u20134.6 s eMMC startup; current experiments use TF1 OS + TF2 library",
+  "conditions": {
+    "system": "TF1 SD",
+    "library": "TF2, 81 games",
+    "developer_mode": "On",
+    "usb_networking": "Off",
+    "schedutil": "Off",
+    "save_location": "Game",
+    "kernel": "unchanged",
+    "eMMC": "not mounted or written"
+  },
+  "runs": {
+    "before": {
+      "rows": [
+        {
+          "run": 1,
+          "scene_s": 5.33005121,
+          "frontend_s": 0.9110908339999995,
+          "library_scan_s": 0.47939033399999964,
+          "discovery_s": 0.3413729999999999
+        },
+        {
+          "run": 2,
+          "scene_s": 5.05106746,
+          "frontend_s": 0.9005814999999995,
+          "library_scan_s": 0.4803898749999993,
+          "discovery_s": 0.4300760000000001
+        },
+        {
+          "run": 3,
+          "scene_s": 5.035376876,
+          "frontend_s": 0.8944678750000001,
+          "library_scan_s": 0.47586875000000006,
+          "discovery_s": 0.23308000000000018
+        }
+      ],
+      "mean_scene_s": 5.138831848666666,
+      "mean_frontend_s": 0.902046736333333,
+      "mean_library_scan_s": 0.4785496529999997,
+      "mean_discovery_s": 0.33484300000000006
+    },
+    "after": {
+      "rows": [
+        {
+          "run": 1,
+          "scene_s": 5.186814084,
+          "frontend_s": 0.9855982499999998,
+          "library_scan_s": 0.5752725419999996,
+          "discovery_s": 0.2866059999999999
+        },
+        {
+          "run": 2,
+          "scene_s": 5.17997246,
+          "frontend_s": 0.9590840009999999,
+          "library_scan_s": 0.5191159169999997,
+          "discovery_s": 0.36897899999999995
+        },
+        {
+          "run": 3,
+          "scene_s": 5.306983959,
+          "frontend_s": 0.89979925,
+          "library_scan_s": 0.469101792,
+          "discovery_s": 0.392242
+        }
+      ],
+      "mean_scene_s": 5.224590167666666,
+      "mean_frontend_s": 0.9481605003333332,
+      "mean_library_scan_s": 0.5211634169999998,
+      "mean_discovery_s": 0.3492756666666666
+    },
+    "parallel-after": {
+      "rows": [
+        {
+          "run": 1,
+          "scene_s": 5.061340543,
+          "frontend_s": 0.9134241669999996,
+          "library_scan_s": 0.49383162499999944,
+          "discovery_s": 0.32711599999999974
+        },
+        {
+          "run": 2,
+          "scene_s": 5.494514544,
+          "frontend_s": 0.9953130840000002,
+          "library_scan_s": 0.5700878750000005,
+          "discovery_s": 0.3478559999999997
+        },
+        {
+          "run": 3,
+          "scene_s": 5.33477971,
+          "frontend_s": 0.9063830419999999,
+          "library_scan_s": 0.4882605009999992,
+          "discovery_s": 0.3132459999999999
+        }
+      ],
+      "mean_scene_s": 5.296878265666667,
+      "mean_frontend_s": 0.9383734309999999,
+      "mean_library_scan_s": 0.5173933336666664,
+      "mean_discovery_s": 0.3294059999999998
+    }
+  },
+  "interpretation": {
+    "exfat_only_probe": "Rejected and OS rolled back; no controlled-restart benefit established",
+    "parallel_console_scan": "Rejected and frontend rolled back; scan and frontend averages increased",
+    "retained_performance_changes": [],
+    "retained_source_change": "Stronger native helper tests for ext4 and missing paths",
+    "next_measurement": "Same-build eMMC qualification separating card insertion from external game/artwork I/O"
+  },
+  "observed_mmc_modes": {
+    "emmc": "HS200, 200 MHz, 8-bit",
+    "TF1": "SDR104, 150 MHz, 4-bit",
+    "TF2": "SDR104, 150 MHz, 4-bit",
+    "note": "No low-speed SD fallback observed; bus clocks do not establish application I/O performance"
+  }
+}

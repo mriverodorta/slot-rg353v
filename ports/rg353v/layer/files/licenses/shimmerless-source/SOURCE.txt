@@ -1,0 +1,8 @@
+Sharp Shimmerless / Sharp Shimmerless Grid by zadpos (Woohyun-Kang).
+Source: https://github.com/Woohyun-Kang/Sharp-Shimmerless-Shader
+Pinned commit: 2a74e7af599335c2ce5e493f823a757925c80db3
+License: CC0 1.0 (see LICENSE.txt and original shader headers).
+Slot adaptation: uniforms for padded/cropped game textures and physical FBO size;
+clamp sampling to the game rectangle; explicit output-pixel bounds and guarded
+grid ratio division; exact integrated partial LCD-line coverage; native menu selection. Grid defaults are upstream's
+0.3 line ratio and 0.3 opacity on each axis. No Perfect overlay assets included.

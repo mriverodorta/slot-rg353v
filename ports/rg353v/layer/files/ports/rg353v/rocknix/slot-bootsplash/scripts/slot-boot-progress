@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""Track completed boot milestones; renderer never waits for a Wi-Fi association."""
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import time
+
+ROOT=Path('/run/slot-boot')
+PLAN=Path('/usr/share/slot/boot-plan.json')
+
+def states(text):
+    return {p['Id']:p for block in text.split('\n\n') if (p:=dict(l.split('=',1) for l in block.splitlines() if '=' in l)).get('Id')}
+
+def outcome(unit,optional=False,settled=False):
+    if not unit:return None
+    active=unit.get('ActiveState')
+    if active=='active':return 'ready'
+    if active=='failed':return 'failed'
+    if unit.get('LoadState') in ('masked','not-found'):
+        return 'skipped' if optional else None
+    if active=='inactive':
+        if unit.get('ConditionResult')=='no' and int(unit.get('ConditionTimestampMonotonic','0'))>0:return 'skipped'
+        if int(unit.get('ExecMainExitTimestampMonotonic','0'))>0:
+            return 'ready' if unit.get('Result','success')=='success' else 'failed'
+        if optional and settled:return 'skipped'
+    return None
+
+def observe(plan,units,finished):
+    fresh={}
+    for item in plan['services']:
+        if item['id'] in finished:continue
+        if item.get('after') and item['after'] not in finished:continue
+        found=[outcome(units.get(name),item.get('optional',False),bool(item.get('after'))) for name in item['units']]
+        if all(found):
+            result='failed' if 'failed' in found else ('skipped' if 'skipped' in found else 'ready')
+            fresh[item['id']]=result
+    return fresh
+
+def main():
+    ROOT.mkdir(mode=0o700,exist_ok=True);(ROOT/'events').mkdir(mode=0o700,exist_ok=True)
+    if (ROOT/'frontend.displayed').exists():return
+    plan=json.loads(PLAN.read_text());assert plan['schema']==1
+    names=sorted({n for item in plan['services'] for n in item['units']})
+    props=['Id','ActiveState','LoadState','Result','ConditionResult','ConditionTimestampMonotonic','ExecMainExitTimestampMonotonic']
+    renderer=subprocess.Popen(['/usr/bin/slot-splash','--run'])
+    deadline=time.monotonic()+40;finished={}
+    def terminate(*_):raise InterruptedError('Boot monitor stopped')
+    signal.signal(signal.SIGTERM,terminate)
+    try:
+        with (ROOT/'progress.jsonl').open('a',buffering=1) as log:
+            log.write(json.dumps({'event':'plan','total':len(plan['init'])+len(plan['services'])+len(plan['frontend']),'init_steps':len(plan['init']),'service_groups':len(plan['services']),'frontend_steps':len(plan['frontend'])})+'\n')
+            while time.monotonic()<deadline:
+                if (ROOT/'frontend.displayed').exists():return
+                if (ROOT/'failed').exists():raise RuntimeError('Early boot failed')
+                r=subprocess.run(['systemctl','show','--no-pager',*names,*[x for p in props for x in ('-p',p)]],capture_output=True,text=True,timeout=2)
+                if r.returncode==0:
+                    for name,result in observe(plan,states(r.stdout),finished).items():
+                        finished[name]=result
+                        (ROOT/'events'/('service-'+name)).touch()
+                        log.write(json.dumps({'event':name,'result':result,'at_boottime':time.clock_gettime(time.CLOCK_BOOTTIME)})+'\n')
+                if (ROOT/'handoff').exists() and renderer.poll() is not None:
+                    # Slot owns the screen; retain tracking until its first swap.
+                    pass
+                elif renderer.poll() is not None:
+                    raise RuntimeError('Splash renderer exited before handoff')
+                time.sleep(.15)
+            raise TimeoutError('Slot startup exceeded the splash deadline')
+    except Exception as error:
+        if not (ROOT/'handoff').exists():
+            (ROOT/'failed').touch()
+            subprocess.run(['/usr/bin/slot-splash','--error'],check=False)
+            print('Slot boot splash: '+str(error),flush=True)
+    finally:
+        if renderer.poll() is None:
+            renderer.terminate()
+            try:renderer.wait(timeout=1)
+            except subprocess.TimeoutExpired:renderer.kill();renderer.wait()
+        ids=['init-'+s for s in plan['init']]+['service-'+s['id'] for s in plan['services']]+['frontend-'+s for s in plan['frontend']]
+        done=sum((ROOT/'events'/s).exists() for s in ids)
+        with (ROOT/'progress.jsonl').open('a') as log:
+            log.write(json.dumps({'event':'finished','completed':done,'total':len(ids),'percent':100*done//len(ids),'frontend_displayed':(ROOT/'frontend.displayed').exists()})+'\n')
+        for name in ('frame.rgba','frame.tmp'):
+            (ROOT/name).unlink(missing_ok=True)
+        finish()
+
+def finish():
+    # A separate unit survives this monitor's exit, and starts after display ownership passes to Slot.
+    if (ROOT/'frontend.displayed').exists() and Path('/usr/bin/slot-boot-profile').is_file() and Path('/storage/.config/slot-boot-profiler.enabled').is_file():
+        try:
+            subprocess.run(['systemd-run','--no-block','--collect','--unit=slot-boot-profile-capture',
+                            '-p','Type=exec','-p','Nice=19','-p','IOSchedulingClass=idle',
+                            '-p','RuntimeMaxSec=150','/usr/bin/slot-boot-profile','capture'],
+                           check=False,timeout=3,capture_output=True)
+        except (OSError,subprocess.TimeoutExpired):pass
+    # Keep bounded diagnostic metadata with the existing startup log export.
+    target=Path('/storage/slotcontent/Diagnostics')
+    if target.is_dir():
+        try:
+            import shutil
+            shutil.copyfile(ROOT/'progress.jsonl',target/'boot-progress.jsonl')
+        except OSError:pass
+
+if __name__=='__main__':
+    import sys
+    if sys.argv[1:]==['--finish']:finish()
+    elif len(sys.argv)==1:main()
+    else:raise SystemExit(2)

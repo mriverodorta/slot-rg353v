@@ -1,0 +1,1100 @@
+{
+  "schema": 1,
+  "resolution": [
+    640,
+    480
+  ],
+  "provenance": "Native installer/frontend renders with read-only owner game/art sources, isolated progress and example service responses; not live device recordings. No ROMs, saves or library files are included.",
+  "boot_animation": {
+    "kind": "Captured presentation-timing replay; reconstructed pixels, not camera footage or a performance benchmark.",
+    "timing_file": "media/boot-timing.json",
+    "timing_sha256": "f4ed293c2c001d48fa6440b48fd9082fe5362bc0110a702df761ec8bb96efe98",
+    "mp4_fps": 60
+  },
+  "setup_animation": "Demonstration; installation progress is condensed and not a speed measurement.",
+  "gba_picture": "Perfect overlay with Shimmerless; third-party copyright and no-license-specified notices are recorded in CREDITS.md.",
+  "render_inputs": {
+    "scripts/render-rg353v-wiki.py": "8d9a70cbc197e336daceec19fd0b9e9fc1f15226338831a526bef34cc6542e78",
+    "scripts/wiki/boot_timing.py": "fd281786717d71e1d6e1e64074bc9e320297302a41c2ea94a0c44072ef5020c6",
+    "scripts/wiki/frontend.rs": "3cf42b456d56a556c93b3d73c86b0f4face353b242ebdc3ccbb247b7ecb74516",
+    "scripts/wiki/mock-services.py": "747c5339686e7baeea1d65e0f968464d66472b6319167aaa23cc465c55f38fbe",
+    "ports/rg353v/image/slot-setup-ui.py": "b4d9ff9741f79a719eb1de20306728ece1df08ebe1e6462552123b5772172c1f",
+    "ports/rg353v/image/slot-setup-font.json.gz": "89699bdbf73e0f79612aa75c552dd9adcc98ae545683359ed955fe324e311544",
+    "ports/rg353v/modules/catalog-v1.json": "cf3414f2decabd0bb972f5648068cf35ea25f4e551f9921b0a89bc178a6d096a"
+  },
+  "source": {
+    "build": {
+      "arch": "aarch64",
+      "base_only": true,
+      "content_filesystem": "exfat",
+      "content_label": "SLOT",
+      "device": "RG353V",
+      "kernel_profile": "rg353v-slim-v1",
+      "profile": "normal",
+      "rocknix_target": "RK3566",
+      "startup": "slot",
+      "userspace_profile": "rg353v-lean-v1"
+    },
+    "layer_sha256": "bbd1e1377091dee1713f04a23a141eecf7787aa32cc9757fded9864d6bfd4a8e",
+    "resolved_at": "2026-10-14T02:01:42.422776+00:00",
+    "schema": 1,
+    "sources": {
+      "rocknix": {
+        "commit": "c445081a59518f37d9776e5412dd7b14910696f7",
+        "ref": "refs/tags/20261001",
+        "url": "https://github.com/ROCKNIX/distribution.git"
+      },
+      "slot": {
+        "commit": "868631d7b131540df87c8e3295638e27445cdba2",
+        "ref": "refs/heads/main",
+        "url": "https://github.com/BrandonKowalski/slot.git"
+      }
+    }
+  },
+  "files": {
+    "images/features/about.png": {
+      "sha256": "e9ffbc627c00ec7f4c1d09f846584ee05f2486065d6499265d078296ad952cc5",
+      "bytes": 264905,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/appearance.png": {
+      "sha256": "c3dba78caaad2b2a3e12d6e244fb1f3efc4169e338e0bff21be7d36168937455",
+      "bytes": 199513,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/audio.png": {
+      "sha256": "e9d383b9b50b9c5583c769c6bb83e027873754465d010b9a9c199906c99ca36f",
+      "bytes": 211772,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/clock-setup.png": {
+      "sha256": "2bafd089dd6e1c0e051bf3b2e7f6b582bd4ff9d7248d157863d2005ac722bc09",
+      "bytes": 198600,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/connections.png": {
+      "sha256": "1854828c6fcfe27f2af5080855ab9fc387e26c577c92cf1e772f0b330721d669",
+      "bytes": 185150,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/content.png": {
+      "sha256": "615b0182a6d03c6dc5035604f7232de71fd7361c3e00e67a8d850c5ce00599b6",
+      "bytes": 201396,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/controls-game.png": {
+      "sha256": "d11255ba1c050bb6d4e37293f728a85dee77aad7d1d55219e8643d00396326b2",
+      "bytes": 207877,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/controls-recording.png": {
+      "sha256": "45f68c165eb61791a6432496b228b33cabfe1e5b111aa8a5d9d7b044d4328fe4",
+      "bytes": 212413,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/controls-shelf.png": {
+      "sha256": "7de0176bd9b506e7c4df8a7846f67b37bdc13bc74c2720d4f7ae4cfea2263d9e",
+      "bytes": 192780,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/controls-shortcuts.png": {
+      "sha256": "21910692964119043007fd043d782985b871f79c31777422fe29f487fa2ee01d",
+      "bytes": 230979,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/controls.png": {
+      "sha256": "88ff64a81160160b39d7735ee5421dab9985fc1d0bfcc360eda30034aa9442d0",
+      "bytes": 190092,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/cpu-governor-on.png": {
+      "sha256": "61ecb2d3a80ce49403a79741e44f1132e66dd46eae03b75aa05d2a094abd32ae",
+      "bytes": 224440,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/cpu-governor.png": {
+      "sha256": "8713a109fe778f66941e2df7a0272b4b9b518497b823d92a9992819a5db8dd0a",
+      "bytes": 225057,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/date-time.png": {
+      "sha256": "b08d45cc8ac4eb022378fc29e9b75aaa745b01e49a9cd36158365f96b375cc0b",
+      "bytes": 192146,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/diagnostics-services.png": {
+      "sha256": "e2a9379603a267af2c5dcccc348ffb3df3c60b453b22bdc32ea5f21c3969570b",
+      "bytes": 228879,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/diagnostics-versions.png": {
+      "sha256": "01b0d269bb378fa657dc38999d18a9970c27d7a93cfa7b8e31cbd65850570950",
+      "bytes": 239808,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/diagnostics.png": {
+      "sha256": "556a259fc8d772ee4756870d8d72a06d5e57b04c8e192708e457a70b7d3a124c",
+      "bytes": 222370,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/favorites.png": {
+      "sha256": "3720e324c2f7ef73f3221d2a6b93fa20ba8d65fbf966c94da8cf7799e3017487",
+      "bytes": 289933,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/features-in-game.png": {
+      "sha256": "c516a00683ba9031fdf2edac382f6b2ea0034a33bff9179547b06003c0420776",
+      "bytes": 227942,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/features.png": {
+      "sha256": "2df1eacd196c8277b05c399648035b133f139ca6c1a3fc29b82e83ace86b1253",
+      "bytes": 224883,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/file-sharing.png": {
+      "sha256": "aeef09d8513ac3679c65b73ab9b83b5e3cf0d414b42ab931c50e3cf0e7995ca9",
+      "bytes": 209940,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/gallery-delete.png": {
+      "sha256": "56a8e22acdf101de2036d452c81fbed85aaa97216d5c9ed629a456ce957cc0e5",
+      "bytes": 60687,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/gallery-grid-date.png": {
+      "sha256": "2bfc7f0cc1da604e8fff27b00f316964ee9c036d7dd9bc7f72ca2b3faf8cc054",
+      "bytes": 192946,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/gallery-grid-game.png": {
+      "sha256": "b871204a19f84f154a286425d43f3ed7d7b00af40cfc494ad564d354ff2047ac",
+      "bytes": 192910,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/gallery-grid-platform.png": {
+      "sha256": "991e476e387dca5da82a37b19a34142949d81a0e5f743210e0219a97793b92c9",
+      "bytes": 202138,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/gallery-image-hidden.png": {
+      "sha256": "485861e92c4a4d22fd43e6e2fa184d8c608b2b3da7e0a7a17f5cb298a2ee55e4",
+      "bytes": 69315,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/gallery-image.png": {
+      "sha256": "2ab36f098c1369bf0fe6b7d58b307e62bab12c42e0b2ab71fab292ef227c5d36",
+      "bytes": 79383,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/game-golden-sun-battle.png": {
+      "sha256": "7c44b1acdb977112d0b06277a8de5730e14082d7566689073e9a47f63dbc88c5",
+      "bytes": 464949,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/game-metroid-fusion.png": {
+      "sha256": "d2c3a0db5471e601b38c5aee0b0801dcad915fbed0dbbbc6ae80a0b6157e25bf",
+      "bytes": 241436,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/game-slot-overlay.png": {
+      "sha256": "4740da3a373987b1e8078a31d07f6a19d3aec97a14aab9234aeab45ba08d434c",
+      "bytes": 182978,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/game-zelda-gb.png": {
+      "sha256": "cab1ed19575defe7a156a5176f23a98a9bfc9d7d98939c0a8e07852a2ea987a0",
+      "bytes": 249925,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/game-zelda-gbc.png": {
+      "sha256": "485861e92c4a4d22fd43e6e2fa184d8c608b2b3da7e0a7a17f5cb298a2ee55e4",
+      "bytes": 69315,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/game-zelda.png": {
+      "sha256": "30be6dda8a9e02308d9c1b7fb16fd192ceae2549c164361ef2f6a7355fd5bfc4",
+      "bytes": 183081,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/game.png": {
+      "sha256": "5f8f95487483cf6bc62014d687c2430d5a29b3de03dc3b66d6c661e6ad534332",
+      "bytes": 213817,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/help.png": {
+      "sha256": "eaa4fb15b84d9b5046dcfa8fd6ff432fe3f534966302db22105c9284b4837f3d",
+      "bytes": 215073,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-enhanced-audio-hint.png": {
+      "sha256": "e9d383b9b50b9c5583c769c6bb83e027873754465d010b9a9c199906c99ca36f",
+      "bytes": 211772,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-enhanced-audio.png": {
+      "sha256": "123568247f80651343dc352f65071eccb83f3de08024ab598e5dbbd221b94f71",
+      "bytes": 152225,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-governor-hint.png": {
+      "sha256": "8713a109fe778f66941e2df7a0272b4b9b518497b823d92a9992819a5db8dd0a",
+      "bytes": 225057,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-governor.png": {
+      "sha256": "f5060b195f7e5858759d873fbd14a4cb5fbe5e9262dae31fd47c365e9a474f02",
+      "bytes": 164163,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-in-game-shaders-hint.png": {
+      "sha256": "d310e060245e464368908d1b91c8b6d6b4a51755699ee907d13bf8363a88cd44",
+      "bytes": 229125,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-in-game-shaders.png": {
+      "sha256": "cf6ef875c98e4d63bb090cd64c65b533c196428857708ccdd5cea92a9ed03a36",
+      "bytes": 155638,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-overlay-style-hint.png": {
+      "sha256": "d7b63a2bda8813b1cb4b57237960f9d407ad9177eaf96adcce2a294db5a76b0b",
+      "bytes": 187766,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-overlay-style.png": {
+      "sha256": "ffc2b0b0801b2c3faf66e5311ad4fbbb7d4ce9ca4deb9d64e51314a9881923be",
+      "bytes": 161709,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-paused-game.png": {
+      "sha256": "bdabc0e0ae7783477c070f8175f39c19e39ed43d1d5cae7417b7590bb0c4b32a",
+      "bytes": 182309,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-run-ahead-hint.png": {
+      "sha256": "5f8f95487483cf6bc62014d687c2430d5a29b3de03dc3b66d6c661e6ad534332",
+      "bytes": 213817,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-run-ahead.png": {
+      "sha256": "edc61f968d4166b937560656b67760ff6cc28b973a2161f5af7390b0b7db076e",
+      "bytes": 150846,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-save-location.png": {
+      "sha256": "6c09963a8c315dd40858ca5e935f5b073ec0bf5907e7f261bcda1aecf123f5d6",
+      "bytes": 165493,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-usb-network-hint.png": {
+      "sha256": "d4319e0da66f9af28e016c735f09f231e4bbcd4f29de5c6ca7753554ebb04e35",
+      "bytes": 187237,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/info-usb-network.png": {
+      "sha256": "af8e96ce8637d2d9847850906c8c4fb050c89b0871861e5a1133578bc03d6fb9",
+      "bytes": 161698,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/overlays.png": {
+      "sha256": "d7b63a2bda8813b1cb4b57237960f9d407ad9177eaf96adcce2a294db5a76b0b",
+      "bytes": 187766,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/pause.png": {
+      "sha256": "29587fef3022d6230533b2e91c3a0f1eef4d4cbab42e123052dfc1fb078325b4",
+      "bytes": 146354,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/power-menu-game.png": {
+      "sha256": "913f2eb4d3b051687c08659ea1c3650876d47f1870276a93a255270d31bd98e5",
+      "bytes": 186480,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/screen-gb.png": {
+      "sha256": "ca8f25fff560a7b3ce283b47543370ba685274fb4f80cc03fa8b1a18816aeed0",
+      "bytes": 203308,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/screen-gba.png": {
+      "sha256": "6d3de578c8c605d92bdb610ca59249bc02bae907d8f127b27d07c86bcf88c86d",
+      "bytes": 197785,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/screen-gbc.png": {
+      "sha256": "6d3de578c8c605d92bdb610ca59249bc02bae907d8f127b27d07c86bcf88c86d",
+      "bytes": 197785,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/screen.png": {
+      "sha256": "c2e6b676d229797b2f3219e843337b35aec4a369b292f073a2cde072058ebdbc",
+      "bytes": 219548,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/screenshots.png": {
+      "sha256": "089889442c3e9c6dc8b36c705ce60e6745fd5481f5abb7152fc919913bd248a2",
+      "bytes": 189108,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/sd-scanning.png": {
+      "sha256": "8ab2ca44db25cf49bd6f0aa40c047e15b33d702fe32c5cc26fa50ae915da1d43",
+      "bytes": 425531,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/settings-gallery.png": {
+      "sha256": "4bd402db70d98dc9cc705f0cb24a3e38e899c0cc7a8ec9a100b92ea16cef59b1",
+      "bytes": 210347,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/settings.png": {
+      "sha256": "bc33272d3da3c6bc11a4a8ead9f3f0dfa19a322a58a18837897221b34edce75e",
+      "bytes": 210721,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/shelf.png": {
+      "sha256": "9f83a4338fdb66480b10487d0d5a5d5ba33466db869cd1a462466f6cbc34af05",
+      "bytes": 292485,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/ssh-set-password.png": {
+      "sha256": "2249061fd3a433e5e86d320cd16a392aea27eaa965fe894ec4967cac8f008477",
+      "bytes": 213585,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/ssh.png": {
+      "sha256": "31e081bbc97b3c710cef452d3316686a4a7e1bbe7a4d66b8d6eabc7fdc34dd36",
+      "bytes": 211719,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/states-delete.png": {
+      "sha256": "ab08faba06704244087d01f7c22e6856663b624a3d4cf27d494fda22daa9510e",
+      "bytes": 45446,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/states.png": {
+      "sha256": "eea83dc67256ea549b7eaa277ef2844c97e355355c5b2c619925aeedd34d5e63",
+      "bytes": 41857,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/storage-eject.png": {
+      "sha256": "c817db647ea7ce01352a2f33d3bd152641030226bf380a4d227b9a80438b64de",
+      "bytes": 219789,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/storage-game.png": {
+      "sha256": "35811c34f84737771bca0be48b0b849a458c480bb9107f70e141cb2fb2d3f137",
+      "bytes": 220009,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/storage-system.png": {
+      "sha256": "8f7649a453e8504bfbb7553847871694157bc1249102473bbe1c10517c05d39e",
+      "bytes": 220529,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/storage-top.png": {
+      "sha256": "ce0fb4541875a87adb4600353212462f00fc54321f369f033262076be4b8e77c",
+      "bytes": 215607,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/storage.png": {
+      "sha256": "ce0fb4541875a87adb4600353212462f00fc54321f369f033262076be4b8e77c",
+      "bytes": 215607,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/system-bottom.png": {
+      "sha256": "f6b79521c87c040bdcb62e6d43737452478a06c6448c62b9441ce9b836627f8e",
+      "bytes": 221362,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/system.png": {
+      "sha256": "aaffc3a96cdf7e61d2af8b5b438ce9e239448050c59d6dc731902fd91cae2987",
+      "bytes": 221707,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/updates-complete.png": {
+      "sha256": "c963861eab25817cb79ee3797b4b7f4e0497ad1879f6d78b86e1ef9c3be2021e",
+      "bytes": 231975,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/updates-resume.png": {
+      "sha256": "8373e0cfa0d462f2976c263565570e8c66853ad94903876a582d15407914f174",
+      "bytes": 245510,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/updates-startup-check.png": {
+      "sha256": "41981059068948c9844ecf32e0f80b2b1dde75a964a71d7771f269f085f81d40",
+      "bytes": 245712,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/updates-waiting-internet.png": {
+      "sha256": "01ea9ec0b01c883e73d0a43f11c62904cd6d5c3921217cb3a85fa527c167a594",
+      "bytes": 247987,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/updates.png": {
+      "sha256": "c963861eab25817cb79ee3797b4b7f4e0497ad1879f6d78b86e1ef9c3be2021e",
+      "bytes": 231975,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/usb-network.png": {
+      "sha256": "f361ea0a521f5b2955fbd921a8f824196155d2ec94df8da2aa736d9683e3f469",
+      "bytes": 225622,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/usb-storage-connected.png": {
+      "sha256": "4c961d45be7774355a724034fa391339d7de2fb72fa399f9b50e540196d07d31",
+      "bytes": 45272,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/usb-storage-waiting.png": {
+      "sha256": "e3ffe41d06e1c0170f2d1ced53d5db771ca1a547e1fcce1aa40d88aecc0cc93a",
+      "bytes": 38771,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/usb-storage.png": {
+      "sha256": "b59894aef1fcdd74bc577b2fc83221a9c1b9012b43b23c92f6348b9064232a6c",
+      "bytes": 218960,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/usb.png": {
+      "sha256": "d4319e0da66f9af28e016c735f09f231e4bbcd4f29de5c6ca7753554ebb04e35",
+      "bytes": 187237,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/wifi-networks.png": {
+      "sha256": "4818617bb49c456e78ff8471f8de0329f5e0126daba0c2ec25f919971350702f",
+      "bytes": 193331,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/wifi-password.png": {
+      "sha256": "39d1360098dbff5978b11148fd8e5a9f976a493ad846ce27f5b948a0cf64e679",
+      "bytes": 210418,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/wifi-status.png": {
+      "sha256": "16046c550bcb382088755d4ff1b1875b54dfd2e7d400204a3d9a7d753c039602",
+      "bytes": 200255,
+      "width": 640,
+      "height": 480
+    },
+    "images/features/wifi.png": {
+      "sha256": "16046c550bcb382088755d4ff1b1875b54dfd2e7d400204a3d9a7d753c039602",
+      "bytes": 200255,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/01-destination-sd.png": {
+      "sha256": "d482b1eb3f0c0cf965cd09de69b101ff273cfd8af01c93a67edb869179f0f1cd",
+      "bytes": 17702,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/02-destination-emmc.png": {
+      "sha256": "5b3275a9a0dc3b6d8d12623fe7431ec5a254591a928d86cac5c3fe3bb57f8d07",
+      "bytes": 17719,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/03-preset-minimal.png": {
+      "sha256": "3d95fb237cbfd5313179515c697aa057283f7b1265fe29704eb7160bf8d596ce",
+      "bytes": 40453,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/04-preset-recommended.png": {
+      "sha256": "a5c572737f1b37f01033c20d227d3ba617c19c761d5e190e37ca38f5fae238e4",
+      "bytes": 40456,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/05-preset-custom.png": {
+      "sha256": "c76fa4239526f99b5327c6c778cddbaedc7c04f2d1f8ac2f73e4965c7bf24bc2",
+      "bytes": 40897,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/05-preset-full.png": {
+      "sha256": "73cd776c9bf52e3b00b118e502ff9886dbf31b4e9c0b37b43b12ae855930d920",
+      "bytes": 40906,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/06-features-emulators.png": {
+      "sha256": "a166b80631785b1add17683580b7e3590632d8c36799720f5bf82f5c7bdd2c33",
+      "bytes": 38863,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/07-features-continue.png": {
+      "sha256": "9e099e4eea06bdd58883284f840972fa952324aa2c1cf552055eaea4a584d672",
+      "bytes": 47610,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/08-review-top.png": {
+      "sha256": "824710464ee81a516226879a56806d543725937ecd192c0cfe0d0e4372e5582d",
+      "bytes": 31174,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/09-review-bottom.png": {
+      "sha256": "4567c46946a444d4c0dd86971104e06675040702ebf21905fe58651991d773d9",
+      "bytes": 40650,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/10-confirm-sd.png": {
+      "sha256": "0392dfc9205298ec7abd1243c57d03fb862693d0255d1fe15d3e7ba490f4ca7b",
+      "bytes": 23565,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/11-confirm-sd-selected.png": {
+      "sha256": "f62877a248c564f9f9a6f38ca00a5cc4d8a502cabf3b0faf268620f86cdcaf73",
+      "bytes": 23530,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/12-complete-sd.png": {
+      "sha256": "f3aac5c40524ca6409e727898a4679ce4baaf7befaffda9d39bbdf048472d268",
+      "bytes": 42831,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/13-confirm-emmc.png": {
+      "sha256": "63dbc3f3e415dfcbe7d1c0a042a7b502e291ed6a066e6c5894c6404a22ce9eaa",
+      "bytes": 22182,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/14-complete-emmc.png": {
+      "sha256": "15778d941852f7099c183ab638b452e938f7131f02bf909e2c19a98665689e98",
+      "bytes": 43019,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/15-no-transfer-warning.png": {
+      "sha256": "aae7849effb242e3a57ff1da8e61c91cbe59d776bc6c4d40bfd123726b9acfb3",
+      "bytes": 19678,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/16-no-emulator-warning.png": {
+      "sha256": "3718343403612ce76c344203bc9a6d10429d11c285da0260acd57fb9d059da74",
+      "bytes": 46355,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/17-setup-error.png": {
+      "sha256": "6f7c7fb415d4e351a4c10e19dcb13b8463a393fc15e6dbd7c261bc3ff391f4bd",
+      "bytes": 12934,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/complete-05.png": {
+      "sha256": "01edb6e7e68fc98d1929d424453d1e1ec868ff5bcaefc35d9394a2236c05d26d",
+      "bytes": 44091,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/complete-10.png": {
+      "sha256": "b04a39dc908d1b780853adf10848a2d8fb676a585602f2120fe2c492f9899b72",
+      "bytes": 43903,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/features-emulator-mgba.png": {
+      "sha256": "a166b80631785b1add17683580b7e3590632d8c36799720f5bf82f5c7bdd2c33",
+      "bytes": 38863,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/features-enhanced-audio.png": {
+      "sha256": "2b66161d88d0f64f01cc9294b17571560475122596a773a624b5e1eac5a39ea1",
+      "bytes": 39508,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/features-network-time.png": {
+      "sha256": "ba85431b6db2cae4b47ac87fedebce13d71734f0f996974ea798741674a94e5f",
+      "bytes": 42030,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/features-wifi.png": {
+      "sha256": "54abccb46d41ac9504d9c512f02bd781e78fc94373bc19f6c1c8afa97eb09c61",
+      "bytes": 39044,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-developer.png": {
+      "sha256": "4f129fcdabd71308af9761c21d3d3ec0dd8a81c9dba302ce996b86e8fd643e5e",
+      "bytes": 27451,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-diagnostics.png": {
+      "sha256": "a7bb585afaf198fb797324e5f5482ce4bda71c1aaaa0b95e0ad93da2f581094c",
+      "bytes": 26426,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-emulator-gpsp.png": {
+      "sha256": "f334e86afbe745381851ef64257ba90c46d1ca3af928088ee37839def93627aa",
+      "bytes": 26394,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-emulator-mgba.png": {
+      "sha256": "19d9efed0172c1a19f352c40746d51f2036c507e7a1e68ccdcb73859c09f826d",
+      "bytes": 24156,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-enhanced-audio.png": {
+      "sha256": "e8045fb11b1ff214249faa4edea0b645b591ddc3e9e50fc72d052551b6966a76",
+      "bytes": 27045,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-external-sd.png": {
+      "sha256": "f9846abc6c141b5d50ab50cbb8a1fe48a6b88b9759c554d51d25eb43c03da2d2",
+      "bytes": 28467,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-filters.png": {
+      "sha256": "e4731929a6e9936aeadec0b8ab98aa92f8981e2d130e5046043799c02ab2eb7b",
+      "bytes": 24661,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-frame-counter.png": {
+      "sha256": "ae593106f4dc083bcdf62e19f3eb5e611b24c0b239d8d7272ee32e873cfbbaaf",
+      "bytes": 21402,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-gallery.png": {
+      "sha256": "46c6fd52c2ee218f7b49042d47888f7d9ce095f69075a8ad5f39562fd3d2c754",
+      "bytes": 28873,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-network-time.png": {
+      "sha256": "a72231a8e33ec6c074a52dca0978bea8070f976ae68067ce348bbfb80d9e6b0c",
+      "bytes": 28391,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-overlays.png": {
+      "sha256": "049c9fb3ce9bb52f17210119a4db966058e222e2f3d4a7ae09f26b79282fedfb",
+      "bytes": 25013,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-profilers.png": {
+      "sha256": "a4de0bf9b4f409149b228d792ca0d64018b81708868dfdc6feed0fb608def3a3",
+      "bytes": 26057,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-rewind.png": {
+      "sha256": "bf3677ae791a6a347dfe38608c4455c684bf4d1d40a00a5e1467f2eddb301646",
+      "bytes": 24948,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-runahead.png": {
+      "sha256": "57efa75298737d9f7d2823968b03d04fe102a5f6dc8bfda93bb283b4d42d44f6",
+      "bytes": 26847,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-schedutil-governor.png": {
+      "sha256": "85e3183bf1538f82228f1bfc1017faae72ca7fcdcab63495a32c0a517fe41313",
+      "bytes": 32612,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-screenshots.png": {
+      "sha256": "8538d11cbbb98c16c4c6eda1b1c2a3abcf648ad6abc3dd3f46e07759ec0ca876",
+      "bytes": 32636,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-sharing.png": {
+      "sha256": "d9bbb19e6d384028627b38f46f2b48ffb012d3b2dc879be44b2f36304617d060",
+      "bytes": 26791,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-ssh.png": {
+      "sha256": "ac24acd2ce0a029eb6446412e52c1e4962fa599fe4e75d9a960e92f160e02d87",
+      "bytes": 27307,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-storage-tools.png": {
+      "sha256": "23075060a6fac6dfaf65638f6f6cfeff6b18f08d053f7eba3cd0f16eea44e005",
+      "bytes": 32731,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-updates.png": {
+      "sha256": "e492aae00f91f01a368b499631a65170f99b78ecd80bbe446efb85fca80c599e",
+      "bytes": 25837,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-usb-network.png": {
+      "sha256": "25e3a0ee459d9f3a36a69bb3e4dcbcfcf7859450973ac4eab0104cc4d1340dad",
+      "bytes": 29168,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-usb-storage.png": {
+      "sha256": "453aabe6ec188711267a9a3afb0b155285ec7605ad6ac1dd47179bde6080d5ff",
+      "bytes": 23533,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/info-wifi.png": {
+      "sha256": "18ca5a8066db10d40dd196fd67f3c7272c003b5802ec118ef415ac02486052ad",
+      "bytes": 21791,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-005-0.png": {
+      "sha256": "d4ba4295432e959bdb9adbb0380c3a8ed7a0713c0f687d58dd7bd8a933fbc897",
+      "bytes": 17930,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-005-1.png": {
+      "sha256": "8f9e7b7aea4bac19734c4a9c487e07d4d6b9e03b65d17abc18b927d99cd0b028",
+      "bytes": 17981,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-005-2.png": {
+      "sha256": "9a0787fa88242401d5f46860ad0088218d5de3ef817ff9d73b18115947c0b982",
+      "bytes": 17912,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-020-0.png": {
+      "sha256": "987361d280cede379b3c074bbe42ac3dbf8e9b457d013bb14895bf3ca9a927be",
+      "bytes": 18130,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-020-1.png": {
+      "sha256": "ac934a7399a7d8a4ffa689bcddae7e3a8990daf205f8e2ae2315be02c75aa9ef",
+      "bytes": 18116,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-020-2.png": {
+      "sha256": "80a05f90cdd3d8fd15eac3943284526364a2488c076f6835b12e0823d7455c28",
+      "bytes": 18322,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-045-0.png": {
+      "sha256": "c9f722c117f9adf96f1d861808832c2dd8cbdd6faee07c91e627f74f6210adda",
+      "bytes": 17767,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-045-1.png": {
+      "sha256": "f3616a4a24456709dc4d3baf498ae3750265e7f9eb076fb55e7a04e387533d23",
+      "bytes": 17819,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-045-2.png": {
+      "sha256": "81db6f4eb3f0a6d9e02b881ca688f9be1dc237b9c668c1620851840d78c61292",
+      "bytes": 17745,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-075-0.png": {
+      "sha256": "4574438703667d9f97e51aa699137452d3a36d0dac343416fdeb49770e1614f8",
+      "bytes": 17961,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-075-1.png": {
+      "sha256": "b176ad200d915e51f28e1b19ab7d2012059da37536bddb9d20f8a68e5fdd6e74",
+      "bytes": 18021,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-075-2.png": {
+      "sha256": "aa192bbf223bf513bd49ec2d70c0b32fa7764fa1de6cb3c39582cdaf73b27f44",
+      "bytes": 17985,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-078-0.png": {
+      "sha256": "07431c0d654f9919b79b59cccca319d358dff2de83c825bdf6257ffb204b3051",
+      "bytes": 18429,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-078-1.png": {
+      "sha256": "7a6d649b033f113c6e50e2cf3885f6fc984f0df3b39a3df458a7e0da8d310fc7",
+      "bytes": 18466,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-078-2.png": {
+      "sha256": "1eb2b0c66e1f44f83a6c60e6579be5c9988634e27650622d005e33e7751758a9",
+      "bytes": 18403,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-088-0.png": {
+      "sha256": "07c15c20fe096d01a7e7f16e210198e1dc0da43de9a1fa94df6d757ac8d00504",
+      "bytes": 18330,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-088-1.png": {
+      "sha256": "3511f9d9b6f9366d322b5d06ca0574016d89b6d04778814b3c9fec590b2a1c80",
+      "bytes": 18388,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-088-2.png": {
+      "sha256": "d1d70e6474b2f06e083a6e8c17fe51917f893b233aee1cb4da0ee75ae09bf8e2",
+      "bytes": 18525,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-096-0.png": {
+      "sha256": "f8a1de189a1e0cfede983a4d8597881e04f8c2d5a07f0b1e4cee6c318d76f7bd",
+      "bytes": 18541,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-096-1.png": {
+      "sha256": "dd4cb2fe81a61fd52c57a5156eae5f36b8b609f81e7d97ddc5455d4db9995729",
+      "bytes": 18582,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-096-2.png": {
+      "sha256": "af6aac9de882f2e45857e4687717486acfab5e88adbdf8f52850e3648f0cb2ba",
+      "bytes": 18516,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-100-0.png": {
+      "sha256": "e3952113fe4766181da29b0b83ceab19fff4c994cbb052c4156f44bc13db5a9c",
+      "bytes": 17248,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-100-1.png": {
+      "sha256": "2d02278a05c7c538b98d4a0d7ad5e733ea46289651bc6e2c9a58831d043a63b3",
+      "bytes": 17305,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/progress-100-2.png": {
+      "sha256": "725aeb0e78e647263193e1c483e53b3817c01f6662cd3eef83aaddc1c91a292a",
+      "bytes": 17447,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/review-05.png": {
+      "sha256": "06c2c129483ad93bdfce79d025e757dc93872b20ecc7bdfd9fe5bd0a20838218",
+      "bytes": 39486,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/review-10.png": {
+      "sha256": "ea7cd6981c835c6c504773f8ab3c0ddcd168af08e1ae2ed8067da5a700dbea3e",
+      "bytes": 46766,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/review-15.png": {
+      "sha256": "3bff7bb71df808a1f26e2de9dabf07a8192ef25c8a63012baac49237a0037169",
+      "bytes": 48388,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/review-17.png": {
+      "sha256": "4567c46946a444d4c0dd86971104e06675040702ebf21905fe58651991d773d9",
+      "bytes": 40650,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/review-full.png": {
+      "sha256": "67d0375cefa94ca1b238d513e626d14a1fe8562d8f4923dcbbdfc987e91271d7",
+      "bytes": 29493,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/review-minimal.png": {
+      "sha256": "bb25728e76075d71267cc100cdcc2b2a65360230d22497ddbe826e29b812631b",
+      "bytes": 29404,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/review-recommended.png": {
+      "sha256": "869566f8fda8dd84b6307fbbb63d9a2fa1408fad7727588b7a01e2f6e9cafc03",
+      "bytes": 30575,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/select-gallery.png": {
+      "sha256": "77432f0b750da048d37cef03af460a0599012498de4135f9e1a40a8be3da378f",
+      "bytes": 42797,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/select-screenshots.png": {
+      "sha256": "a9fc282d4660591f9573bdf40a5822e180ef5b6a180ea530c4ac5005afb060a5",
+      "bytes": 44572,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/select-usb-network.png": {
+      "sha256": "01b11c09fb89d8b6c2e6d83c2b2ddd265e7dd83a4634d14300f2c3cc1622d769",
+      "bytes": 39038,
+      "width": 640,
+      "height": 480
+    },
+    "images/setup/select-wifi.png": {
+      "sha256": "54abccb46d41ac9504d9c512f02bd781e78fc94373bc19f6c1c8afa97eb09c61",
+      "bytes": 39044,
+      "width": 640,
+      "height": 480
+    },
+    "media/boot-to-shelf.gif": {
+      "sha256": "7c79d2a65b0ede260b6fef9286ba38c3a97e6070f97f38755801192f1d70cab2",
+      "bytes": 115872,
+      "width": 640,
+      "height": 480,
+      "frames": 17,
+      "duration_ms": 5460
+    },
+    "media/boot-to-shelf.mp4": {
+      "sha256": "25a4626fe7e3860551248ad1a4c9845b3bbf7bedc6d541ac14653be8d923cf28",
+      "bytes": 80182
+    },
+    "media/feature-tour.gif": {
+      "sha256": "f95575134084a92706126823651329884ab3157d6ae7b499a2134e02aa1eea90",
+      "bytes": 973970,
+      "width": 640,
+      "height": 480,
+      "frames": 19,
+      "duration_ms": 24600
+    },
+    "media/feature-tour.mp4": {
+      "sha256": "5c944d7455c47e8e8fcb3f77298e8a4d34ee6d7eecacc4813fcb18c3dccd3095",
+      "bytes": 1050361
+    },
+    "media/setup-walkthrough.gif": {
+      "sha256": "55a56be937767722f115fc280653c0e03cef834fe8b5fc69d22058a0281a7318",
+      "bytes": 432009,
+      "width": 640,
+      "height": 480,
+      "frames": 46,
+      "duration_ms": 30100
+    },
+    "media/setup-walkthrough.mp4": {
+      "sha256": "241b0ea0f842407070fb55fd87d29b471567b9a3725b420d7eeb137b7453bf68",
+      "bytes": 499189
+    }
+  }
+}

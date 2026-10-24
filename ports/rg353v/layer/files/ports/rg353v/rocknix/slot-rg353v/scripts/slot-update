@@ -1,0 +1,892 @@
+#!/usr/bin/env python3
+"""Verified, versioned Slot/core updates. Content is never an installation target."""
+import argparse
+import contextlib
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+import platform
+import re
+import shutil
+import shlex
+import signal
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import uuid
+
+sys.dont_write_bytecode = True
+
+API = 1
+RESERVE = 64 * 1024 * 1024
+LIMIT = 512 * 1024 * 1024
+CORES = {'mgba_libretro.so', 'gpsp_libretro.so'}
+SAFE_ID = re.compile(r'[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}\Z')
+HASH = re.compile(r'[0-9a-f]{64}\Z')
+STARTUP_TIMEOUT = 45
+HEALTH_WINDOW = 10
+HEARTBEAT_AGE = 4
+RUN_DIRECTORY = Path('/run')
+RUNTIME_FILES = (Path('/etc/os-release'), Path('/usr/share/slot/os-profile.json'))
+
+
+class UpdateError(Exception):
+    pass
+
+
+class UpdateBusy(UpdateError):
+    """Another updater owns the lock; retry without rejecting its candidate."""
+    pass
+
+
+def require(condition, message):
+    if not condition:
+        raise UpdateError(message)
+
+
+def sha(path):
+    digest = hashlib.sha256()
+    with open(path, 'rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def syncdir(path):
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def atomic_json(path, value):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + '.tmp-' + uuid.uuid4().hex)
+    try:
+        with tmp.open('x') as stream:
+            json.dump(value, stream, indent=2, sort_keys=True)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
+        syncdir(path.parent)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def load(path):
+    return json.loads(Path(path).read_text())
+
+
+def files(root):
+    result = {}
+    for path in sorted(Path(root).rglob('*')):
+        require(not path.is_symlink(), f'Symlink refused: {path}')
+        if path.is_dir():
+            continue
+        require(path.is_file(), f'Non-regular file refused: {path}')
+        result[path.relative_to(root).as_posix()] = {
+            'size': path.stat().st_size, 'sha256': sha(path),
+            'mode': 0o755 if path.stat().st_mode & 0o111 else 0o644}
+    return result
+
+
+def safe_path(name):
+    require(isinstance(name, str), 'Archive paths must be strings')
+    p = PurePosixPath(name)
+    require(bool(name) and not p.is_absolute() and '..' not in p.parts
+            and str(p) == name and '\\' not in name, f'Unsafe path: {name}')
+    return p
+
+
+def elf(path):
+    with open(path, 'rb') as stream:
+        header = stream.read(20)
+    require(len(header) == 20 and header[:6] == b'\x7fELF\x02\x01'
+            and int.from_bytes(header[18:20], 'little') == 183,
+            f'Expected Linux AArch64 ELF: {path}')
+
+
+def core_file(name):
+    return name in CORES or name.startswith('licenses/core-sources/')
+
+
+def inventory_hash(inventory):
+    """Bind a delta to bytes and modes, not merely a reusable version label."""
+    return hashlib.sha256(json.dumps(inventory, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def component_files(inventory, kind):
+    return {n: v for n, v in inventory.items() if core_file(n) == (kind == 'cores')}
+
+
+def declared_cores(declared):
+    require(isinstance(declared,dict), 'Invalid build compatibility declaration')
+    cores=declared.get('cores', sorted(CORES))
+    require(isinstance(cores,list) and bool(cores) and all(isinstance(c,str) for c in cores) and len(cores)==len(set(cores))
+            and set(cores)<=CORES, 'Invalid installed emulator set')
+    return set(cores)
+
+
+def installed_cores(system):
+    declaration=Path(system)/'update-contract.json'
+    declared=load(declaration) if declaration.exists() else {}
+    return declared_cores(declared)
+
+
+def contract(system):
+    declaration = Path(system) / 'update-contract.json'
+    declared = load(declaration) if declaration.exists() else {'schema': 1, 'settings': 1, 'sram': 1}
+    require(isinstance(declared,dict) and declared.get('schema') == 1, 'Unsupported build compatibility declaration')
+    return {'config': declared['settings'], 'sram': declared['sram'],
+            'states': {name: sha(Path(system) / name) for name in sorted(declared_cores(declared))}}
+
+
+MODULE_POLICY = 'module-policy-v1.json'
+MODULE_RECORD = Path('/usr/share/slot/modules-v1.json')
+MODULE_FEATURES = Path('/usr/share/slot/features-v1')
+MODULE_ID = re.compile(r'[a-z][a-z0-9-]{0,63}\Z')
+
+
+def normalize_modules(value):
+    require(isinstance(value, dict) and value.get('schema') == 1, 'Unsupported module policy')
+    known, selected, optional = value.get('known'), value.get('selected'), value.get('optional')
+    require(isinstance(known, list) and 0 < len(known) <= 128
+            and all(isinstance(n, str) and MODULE_ID.fullmatch(n) for n in known)
+            and len(set(known)) == len(known), 'Invalid module catalog identity')
+    require(isinstance(selected, list) and all(isinstance(n, str) for n in selected)
+            and len(set(selected)) == len(selected) and set(selected) <= set(known), 'Invalid module selection')
+    require(isinstance(optional, dict) and len(optional) <= 50000, 'Invalid optional file policy')
+    normalized = {}
+    for name, owners in optional.items():
+        safe_path(name)
+        require(len(name) <= 512 and not any(c in name for c in '\r\n\x00'), 'Invalid optional file path')
+        require(isinstance(owners, list) and bool(owners) and all(isinstance(n, str) for n in owners)
+                and len(set(owners)) == len(owners) and set(owners) <= set(known), 'Invalid module file ownership')
+        normalized[name] = sorted(owners)
+    require(isinstance(value.get('kit'), str) and bool(SAFE_ID.fullmatch(value['kit'])), 'Invalid module kit identity')
+    return dict(schema=1, kit=value['kit'], known=sorted(known), selected=sorted(selected), optional=normalized)
+
+
+def module_selection(value):
+    return None if value is None else normalize_modules(value)['selected']
+
+
+def module_files(root, policy, excluded_only=False):
+    if policy is None:
+        return
+    selected = set(policy['selected'])
+    for name, owners in policy['optional'].items():
+        path = Path(root) / name
+        exists = path.exists() or path.is_symlink()
+        wanted = bool(selected.intersection(owners))
+        require(not exists or wanted, 'Update restores an omitted module file: ' + name)
+        require(excluded_only or not wanted or exists, 'Update omits a selected module file: ' + name)
+
+
+def module_policy(system):
+    path = Path(system) / MODULE_POLICY
+    if not path.exists() and not path.is_symlink():
+        return None
+    require(path.is_file() and not path.is_symlink(), 'Invalid frontend module policy')
+    policy = normalize_modules(load(path))
+    module_files(system, policy)
+    emulators = {'emulator-mgba': 'mgba_libretro.so', 'emulator-gpsp': 'gpsp_libretro.so'}
+    require(installed_cores(system) == {core for feature, core in emulators.items() if feature in policy['selected']},
+            'Module policy disagrees with installed emulators')
+    return policy
+
+
+def os_module_policy(root):
+    root = Path(root)
+    record = root / 'usr/share/slot/modules-v1.json'
+    system = root / 'usr/share/slot/System'
+    local = module_policy(system)
+    if not record.exists():
+        require(local is None, 'OS has no module selection record')
+        return None
+    require(record.is_file() and not record.is_symlink(), 'Invalid OS module record')
+    policy = normalize_modules(load(record))
+    feature_lines = (root/'usr/share/slot/features-v1').read_text().splitlines()
+    require(bool(feature_lines) and feature_lines[0] == 'slot-features-v1'
+            and sorted(feature_lines[1:]) == policy['selected'], 'OS feature menu disagrees with module selection')
+    prefix = 'usr/share/slot/System/'
+    projected = dict(policy, optional={name[len(prefix):]: owners for name, owners in policy['optional'].items() if name.startswith(prefix)})
+    require(local == projected, 'OS and frontend module policies disagree')
+    module_files(root, policy)
+    return policy
+
+
+def runtime_files():
+    return (*RUNTIME_FILES, *(p for p in (MODULE_RECORD, MODULE_FEATURES) if p.is_file()))
+
+
+def runtime():
+    values = {}
+    for line in Path('/etc/os-release').read_text().splitlines():
+        if '=' in line:
+            key, value = line.split('=', 1)
+            values[key] = value.strip('"')
+    compatible = Path('/proc/device-tree/compatible').read_bytes().split(b'\0')
+    require(b'anbernic,rg353v' in compatible, 'This updater requires an RG353V')
+    require(platform.machine() == 'aarch64', 'This updater requires AArch64 Linux')
+    require(values.get('OS_NAME') == 'ROCKNIX', 'This updater requires ROCKNIX')
+    return {'api': API, 'os_build': values['BUILD_ID'], 'kernel': platform.release()}
+
+
+def ensure_stopped():
+    require(not Path("/run/slot-usb/active").exists(), "Eject USB storage before updating")
+    result = subprocess.run(['systemctl', 'is-active', '--quiet', 'slot-rg353v.service'])
+    require(result.returncode != 0, 'Eject the game and stop slot-rg353v.service before updating')
+    # Also refuse a frontend started outside systemd.
+    for comm in Path('/proc').glob('[0-9]*/exe'):
+        try:
+            require(Path(os.readlink(comm)).name != 'slot', 'A Slot process is still running')
+        except (OSError, ProcessLookupError):
+            pass
+
+
+class Manager:
+    def __init__(self, root, environment=None):
+        self.root = Path(root)
+        self.environment = environment
+        self.root.mkdir(parents=True, exist_ok=True)
+        require(not self.root.is_symlink(), 'Updater root must not be a symlink')
+        self.revisions = self.root / 'revisions'
+        self.revisions.mkdir(exist_ok=True)
+        self.state_path = self.root / 'state.json'
+
+    @contextlib.contextmanager
+    def locked(self):
+        with (self.root / 'lock').open('a') as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                raise UpdateBusy('Another update operation is active') from None
+            yield
+
+    def env(self):
+        return self.environment if self.environment is not None else runtime()
+
+    def state(self):
+        state = load(self.state_path)
+        require(state.get('schema') == 1, 'Unsupported updater state schema')
+        for key in ('current', 'previous'):
+            if state.get(key) is not None:
+                require(bool(SAFE_ID.fullmatch(state[key])), 'Invalid revision in updater state')
+        if state.get('pending'):
+            require(bool(SAFE_ID.fullmatch(state['pending']['id'])), 'Invalid pending revision')
+        return state
+
+    def module_anchor(self, state):
+        if 'module_selection' in state:
+            value = state['module_selection']
+            require(value is None or isinstance(value,list) and all(isinstance(n,str) and MODULE_ID.fullmatch(n) for n in value)
+                    and len(value)==len(set(value)), 'Invalid manager module selection')
+            return value
+        # Pre-module legacy managers have no policy. New module images always
+        # publish an explicit anchor during adoption, before any trial.
+        return None
+
+    def revision(self, name):
+        require(bool(SAFE_ID.fullmatch(name)), 'Invalid revision')
+        path = self.revisions / name
+        require(path.is_dir() and not path.is_symlink(), f'Missing revision: {name}')
+        return path
+
+    def event(self, action, **details):
+        print(json.dumps({'event': action, **details}), flush=True)
+        # Bounded history; never include package contents or user configuration.
+        path = self.root / 'history.json'
+        history = load(path) if path.exists() else []
+        history.append({'time': time.time(), 'event': action, **details})
+        atomic_json(path, history[-100:])
+
+    def verify_revision(self, name):
+        rev = self.revision(name)
+        meta = load(rev / 'revision.json')
+        require(meta['runtime'] == self.env(), 'Revision requires a different OS/kernel/API')
+        require(files(rev / 'System') == meta['files'], 'Installed revision checksum mismatch')
+        require(module_policy(rev/'System') == meta.get('modules'), 'Installed module policy mismatch')
+        require(module_selection(meta.get('modules')) == self.module_anchor(self.state()), 'Revision changes module selection')
+        if self.environment is None and (meta.get('modules') is not None or MODULE_RECORD.exists()):
+            require(MODULE_RECORD.is_file() and not MODULE_RECORD.is_symlink(), 'Installed OS module record is missing')
+            selected=normalize_modules(load(MODULE_RECORD))['selected']
+            require(module_selection(meta.get('modules')) == selected, 'Revision changes installed module selection')
+            features=MODULE_FEATURES.read_text().splitlines()
+            require(bool(features) and features[0]=='slot-features-v1' and sorted(features[1:])==selected,
+                    'Installed feature menu changes module selection')
+        return meta
+
+    def adopt(self, source, name):
+        with self.locked():
+            require(not self.state_path.exists(), 'Already initialized')
+            require(bool(SAFE_ID.fullmatch(name)), 'Invalid version label')
+            source = Path(source).resolve()
+            inventory = files(source)
+            cores=installed_cores(source)
+            require({'slot', 'launch_frontend.sh'} | cores <= inventory.keys(), 'Incomplete baseline System')
+            require(CORES & inventory.keys() == cores, 'Baseline contains an unselected emulator')
+            for item in ('slot', *cores):
+                elf(source / item)
+            require(not (self.revisions / name).exists(), 'Revision already exists')
+            need = sum(item['size'] for item in inventory.values()) + RESERVE
+            require(shutil.disk_usage(self.root).free >= need, 'Not enough space for baseline')
+            tmp = Path(tempfile.mkdtemp(prefix='.adopt-', dir=self.revisions))
+            try:
+                shutil.copytree(source, tmp / 'System')
+                require(files(tmp / 'System') == inventory, 'Baseline changed during copy')
+                meta = {'schema': 1, 'id': name, 'runtime': self.env(),
+                        'compat': contract(source), 'files': inventory, 'kind': 'baseline', 'modules': module_policy(source)}
+                atomic_json(tmp / 'revision.json', meta)
+                self.flush(tmp)
+                tmp.rename(self.revisions / name)
+                syncdir(self.revisions)
+                atomic_json(self.state_path, {'schema': 1, 'current': name,
+                                              'previous': None, 'pending': None, 'module_selection': module_selection(meta.get('modules'))})
+            finally:
+                if tmp.exists():
+                    shutil.rmtree(tmp)
+            self.event('adopted', version=name)
+
+    @staticmethod
+    def flush(root):
+        for path in root.rglob('*'):
+            if path.is_file():
+                with path.open('rb') as stream:
+                    os.fsync(stream.fileno())
+        for path in sorted((p for p in root.rglob('*') if p.is_dir()), reverse=True):
+            syncdir(path)
+        syncdir(root)
+
+    def check_native_cores(self, system):
+        if self.environment is not None:
+            return  # Offline tests use synthetic ELF fixtures.
+        program = '''import ctypes,sys
+core=ctypes.CDLL(sys.argv[1])
+for name in ('retro_get_system_info','retro_init','retro_deinit','retro_load_game',
+             'retro_run','retro_serialize','retro_unserialize','retro_get_memory_data'):
+    getattr(core,name)
+'''
+        for name in sorted(installed_cores(system)):
+            try:
+                result = subprocess.run([sys.executable, '-c', program, str(system / name)],
+                                        capture_output=True, text=True, timeout=15)
+            except subprocess.TimeoutExpired:
+                raise UpdateError(f'Core loader timed out: {name}') from None
+            require(result.returncode == 0, f'Core cannot load on this OS: {name}')
+
+    def check_package(self, package, expected):
+        require(bool(HASH.fullmatch(expected)), 'A trusted SHA-256 is required')
+        require(sha(package) == expected, 'Package SHA-256 mismatch')
+        archive = tarfile.open(package, 'r:*')
+        try:
+            members = archive.getmembers()
+            require(0 < len(members) <= 10000, 'Invalid archive entry count')
+            names = set()
+            total = 0
+            for member in members:
+                safe_path(member.name)
+                require(member.isfile(), 'Only regular archive files are permitted')
+                require(member.name not in names, 'Duplicate archive entry')
+                names.add(member.name)
+                total += member.size
+            require(total <= LIMIT, 'Package is too large')
+            entry = archive.getmember('manifest.json')
+            require(entry.size <= 1024 * 1024, 'Manifest too large')
+            meta = json.load(archive.extractfile(entry))
+            require(isinstance(meta, dict), 'Manifest must be an object')
+            require(meta.get('schema') in (1, 2), 'Unsupported package schema')
+            require(meta.get('target') == {'device': 'rg353v', 'arch': 'aarch64'}, 'Wrong target device/architecture')
+            require(meta.get('kind') in ('slot', 'cores'), 'Unsupported update component')
+            require(bool(SAFE_ID.fullmatch(meta.get('id', ''))), 'Invalid package id')
+            require(meta.get('runtime') == self.env(), 'Package requires a different OS/kernel/API')
+            state = self.state()
+            require(state['pending'] is None, 'An update is already pending; start Slot or roll back first')
+            require(meta.get('base') == state['current'], 'Package was built for a different installed base')
+            current = self.verify_revision(state['current'])
+            require(meta.get('compat') == current['compat'], 'Settings/save/state migration required; package rejected')
+            require(module_selection(meta.get('modules')) == module_selection(current.get('modules')),
+                    'Update changes installed module selection')
+            if meta['kind'] == 'cores':
+                require(meta.get('modules') == current.get('modules'), 'Core update changes module policy')
+            inventory = meta.get('files', {})
+            require(isinstance(inventory, dict) and bool(inventory), 'Invalid/empty payload inventory')
+            delta = meta['schema'] == 2
+            payload = meta.get('changed') if delta else inventory
+            require(isinstance(payload, dict) and all(n in inventory and info == inventory[n] for n, info in payload.items()),
+                    'Delta payload differs from target inventory')
+            if delta:
+                require(meta.get('base_sha256') == inventory_hash(current['files']), 'Delta base inventory mismatch')
+                old_component = component_files(current['files'], meta['kind'])
+                require(meta.get('removed') == sorted(set(old_component) - set(inventory)), 'Invalid delta deletion list')
+                require(payload == {n: v for n, v in inventory.items() if current['files'].get(n) != v},
+                        'Delta omits or repeats changed files')
+                require(bool(payload) or bool(meta['removed']), 'Delta contains no changes')
+            require(names == {'manifest.json'} | {'payload/' + n for n in payload}, 'Archive does not match manifest')
+            for name, info in inventory.items():
+                safe_path(name)
+                require(isinstance(info, dict) and set(info) == {'size', 'sha256', 'mode'}, 'Invalid file descriptor')
+                require(core_file(name) == (meta['kind'] == 'cores'), 'Payload escapes its component')
+                require(type(info['size']) is int and 0 <= info['size'] <= LIMIT, 'Invalid file size')
+                require(isinstance(info['sha256'], str) and bool(HASH.fullmatch(info['sha256'])), 'Invalid file hash')
+                require(info['mode'] in (0o644, 0o755), 'Invalid file mode')
+                if name not in payload:
+                    continue
+                member = archive.getmember('payload/' + name)
+                require(member.size == info['size'], 'Payload size mismatch')
+                digest = hashlib.sha256()
+                stream = archive.extractfile(member)
+                for block in iter(lambda: stream.read(1024 * 1024), b''):
+                    digest.update(block)
+                require(digest.hexdigest() == info['sha256'], 'Payload hash mismatch')
+            require(len(inventory) <= 10000 and sum(v['size'] for v in inventory.values()) <= LIMIT,
+                    'Target component exceeds limits')
+            require(not any(parent.as_posix() in inventory for name in inventory
+                            for parent in safe_path(name).parents if parent.as_posix() != '.'),
+                    'File/directory collision in target inventory')
+            def target_json(name):
+                if name in payload:
+                    return json.load(archive.extractfile('payload/' + name))
+                return load(self.revision(state['current']) / 'System' / name)
+            if meta['kind'] == 'slot':
+                require({'slot', 'launch_frontend.sh', 'update-contract.json'} <= inventory.keys(), 'Missing frontend executable/launcher/compatibility declaration')
+                require((MODULE_POLICY in inventory) == (meta.get('modules') is not None), 'Missing frontend module policy')
+                if meta.get('modules') is not None:
+                    policy = normalize_modules(target_json(MODULE_POLICY))
+                    require(policy == meta['modules'], 'Package module policy differs from its payload')
+                declared = target_json('update-contract.json')
+                expected={'schema':1,'settings':current['compat']['config'],'sram':current['compat']['sram']}
+                require(isinstance(declared,dict) and {k:v for k,v in declared.items() if k!='cores'}==expected
+                        and declared_cores(declared)==set(current['compat']['states']),
+                        'Build requires a settings/save/emulator migration')
+            else:
+                require(CORES & inventory.keys()==set(current['compat']['states']),
+                        'Core update must preserve the installed emulator set')
+            # Immutable retained files are hardlinked inside this filesystem.
+            # Only replacement bytes and metadata need additional space.
+            target = {n: v for n, v in current['files'].items()
+                      if core_file(n) != (meta['kind'] == 'cores')}
+            target.update(inventory)
+            if meta.get('modules') is not None:
+                policy = meta['modules']
+                for name, owners in policy['optional'].items():
+                    wanted = bool(set(policy['selected']).intersection(owners))
+                    require(name not in target or wanted, 'Update restores an omitted module file: ' + name)
+                    require(not wanted or name in target, 'Update omits a selected module file: ' + name)
+            if 'target_sha256' in meta:
+                require(meta['target_sha256'] == inventory_hash(target), 'Target inventory checksum mismatch')
+            need = sum(i['size'] for i in payload.values()) + RESERVE
+            require(shutil.disk_usage(self.root).free >= need, 'Not enough free system storage')
+            return archive, meta
+        except BaseException:
+            archive.close()
+            raise
+
+    def install(self, package, expected):
+        with self.locked():
+            archive, meta = self.check_package(package, expected)
+            with archive:
+                require(not (self.revisions / meta['id']).exists(), 'Version already exists')
+                state = self.state()
+                tmp = Path(tempfile.mkdtemp(prefix='.install-', dir=self.revisions))
+                try:
+                    shutil.copytree(self.revision(state['current']) / 'System', tmp / 'System', copy_function=os.link)
+                    previous = load(self.revision(state['current']) / 'revision.json')['files']
+                    for name in previous:
+                        if core_file(name) == (meta['kind'] == 'cores') and name not in meta['files']:
+                            (tmp / 'System' / name).unlink()
+                    for directory in sorted((p for p in (tmp / 'System').rglob('*') if p.is_dir()), reverse=True):
+                        if not any(directory.iterdir()):
+                            directory.rmdir()
+                    payload = meta['changed'] if meta['schema'] == 2 else meta['files']
+                    for name, info in payload.items():
+                        dest = tmp / 'System' / name
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        # Never truncate/chmod a retained inode shared with rollback.
+                        dest.unlink(missing_ok=True)
+                        with archive.extractfile('payload/' + name) as src, dest.open('xb') as out:
+                            shutil.copyfileobj(src, out)
+                            out.flush()
+                            os.fsync(out.fileno())
+                        dest.chmod(info['mode'])
+                    require(module_policy(tmp/'System') == meta.get('modules'), 'Staged frontend changes module policy')
+                    module_files(tmp/'System', load(self.revision(state['current'])/'revision.json').get('modules'), excluded_only=True)
+                    require(installed_cores(tmp/'System')==set(meta['compat']['states']), 'Emulator selection changed')
+                    for name in ('slot', *installed_cores(tmp/'System')):
+                        elf(tmp / 'System' / name)
+                    self.check_native_cores(tmp / 'System')
+                    installed = dict(meta, files=files(tmp / 'System'))
+                    if 'target_sha256' in meta:
+                        require(inventory_hash(installed['files']) == meta['target_sha256'],
+                                'Reconstructed target inventory checksum mismatch')
+                    atomic_json(tmp / 'revision.json', installed)
+                    self.flush(tmp)
+                    tmp.rename(self.revisions / meta['id'])
+                    syncdir(self.revisions)
+                    # One durable pointer change is the only activation step.
+                    state['pending'] = {'id': meta['id'], 'attempts': 0}
+                    atomic_json(self.state_path, state)
+                finally:
+                    if tmp.exists():
+                        shutil.rmtree(tmp)
+            self.event('staged', version=meta['id'], component=meta['kind'])
+
+    def rollback(self):
+        with self.locked():
+            state = self.state()
+            if state['pending']:
+                rejected = state['pending']['id']
+                self.verify_revision(state['current'])
+                state['pending'] = None
+            else:
+                require(state['previous'] is not None, 'No previous version is available')
+                previous = self.verify_revision(state['previous'])
+                require(module_selection(previous.get('modules')) == self.module_anchor(state), 'Rollback changes module selection')
+                rejected = state['current']
+                state['current'], state['previous'] = state['previous'], state['current']
+            atomic_json(self.state_path, state)
+            self.event('rollback', rejected=rejected, current=state['current'])
+
+    def select(self):
+        with self.locked():
+            state = self.state()
+            pending = state['pending']
+            if pending and pending['attempts']:
+                state['pending'] = None
+                atomic_json(self.state_path, state)
+                self.event('interrupted-start-rollback', rejected=pending['id'])
+                pending = None
+            if pending:
+                try:
+                    candidate = self.verify_revision(pending['id'])
+                    require(module_selection(candidate.get('modules')) == self.module_anchor(state), 'Trial changes module selection')
+                except (UpdateError, OSError, ValueError, KeyError) as error:
+                    state['pending'] = None
+                    atomic_json(self.state_path, state)
+                    self.event('invalid-candidate-rollback', rejected=pending['id'], reason=str(error))
+                    self.verify_revision(state['current'])
+                    return state['current'], False
+                pending['attempts'] = 1
+                atomic_json(self.state_path, state)
+                return pending['id'], True
+            try:
+                self.verify_revision(state['current'])
+            except (UpdateError, OSError, ValueError, KeyError) as error:
+                require(state['previous'] is not None, 'Current version is damaged and no rollback is available')
+                previous = self.verify_revision(state['previous'])
+                require(module_selection(previous.get('modules')) == self.module_anchor(state), 'Rollback changes module selection')
+                rejected = state['current']
+                state['current'], state['previous'] = state['previous'], None
+                atomic_json(self.state_path, state)
+                self.event('damaged-current-rollback', rejected=rejected, reason=str(error))
+            return state['current'], False
+
+    def confirm(self, name):
+        with self.locked():
+            state = self.state()
+            require(state['pending'] and state['pending']['id'] == name, 'Pending version changed')
+            self.verify_revision(name)
+            state['previous'], state['current'] = state['current'], name
+            state['pending'] = None
+            atomic_json(self.state_path, state)
+            self.event('confirmed', version=name, previous=state['previous'])
+            self.try_cache_normal_boot(name)
+
+    def try_cache_normal_boot(self, name):
+        try:
+            self.cache_normal_boot(name)
+        except (UpdateError, OSError, ValueError, KeyError) as error:
+            (self.root / 'normal-boot-v2.sha256').unlink(missing_ok=True)
+            print('Normal-boot cache unavailable: ' + str(error), flush=True)
+
+    def core_hashes(self, system, meta):
+        """Opt-in ABI: frontend must verify and load a sealed copy before dlopen."""
+        marker = system / 'core-verification-v1'
+        if not marker.exists():
+            return None
+        require(marker.read_bytes() == b'SLOT-CORE-SEALED-1\n', 'Unknown core verification contract')
+        cores=installed_cores(system)
+        require(cores==set(meta['compat']['states']) and CORES & meta['files'].keys()==cores
+                and all(meta['files'][n]['mode']==0o755 for n in cores),
+                'Sealed core contract requires every selected executable core')
+        return '\n'.join(n + '=' + meta['files'][n]['sha256'] for n in sorted(cores))
+
+    def cache_normal_boot(self, name):
+        """Compile a verified normal-boot recipe; a changed input returns to Python.
+
+        This is an optimization, never an authority for trials or rollback. The
+        state, runtime and complete inventory are checked again by native tools
+        on every fast boot. Only the non-executable source archive's content
+        hash may wait for the post-shelf audit. Opt-in sealed cores are checked
+        again at game launch instead of being read before the shelf. No path is interpreted as shell.
+        """
+        state = self.state()
+        if state['pending'] is not None or state['current'] != name:
+            return
+        meta = self.verify_revision(name)
+        system = self.revision(name) / 'System'
+        recipe = self.root / 'normal-boot-v2.sh'
+        manifest = self.root / 'normal-boot-v2.sha256'
+        certificate = self.root / 'normal-boot-v2.inventory'
+        # Offline callers supply fixture runtimes and must not certify the host.
+        if self.environment is not None:
+            return
+        inventory = meta['files']
+        checked_runtime = runtime_files()
+        paths = [self.state_path, system.parent / 'revision.json', *checked_runtime,
+                 *(system / n for n in inventory)]
+        require(all(not any(c in str(p) for c in '\n\r\\') for p in paths),
+                'Fast boot paths require plain POSIX names')
+        core_hashes = self.core_hashes(system, meta)
+        q = shlex.quote
+        lines = ['#!/bin/sh', 'set -eu']
+        lines += [f'export SLOT_CORE_DIR={q(str(system))}',
+                  'export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"',
+                  'export SDL_KMSDRM_REQUIRE_DRM_MASTER="${SDL_KMSDRM_REQUIRE_DRM_MASTER:-1}"',
+                  'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/0-runtime-dir}"',
+                  'cd "${SLOT_ROOT:-/storage/slotcontent}"',
+                  f'exec sh {q(str(system / "launch_frontend.sh"))}']
+        lines.insert(2, 'export SLOT_CORE_HASHES=' + q(core_hashes) if core_hashes is not None
+                     else 'unset SLOT_CORE_HASHES')
+        text = '\n'.join(lines) + '\n'
+        tmp = recipe.with_suffix('.tmp')
+        tmp.write_text(text)
+        tmp.chmod(0o700)
+        os.replace(tmp, recipe)
+        tmp = certificate.with_suffix('.tmp')
+        tmp.write_text('\n'.join(['SLOT-BOOT-2', meta['runtime']['kernel'], str(system),
+                                  str(len(checked_runtime)), *(str(p) for p in checked_runtime),
+                                  *(f"{info['mode']:o} {n}" for n, info in inventory.items())]) + '\n')
+        tmp.chmod(0o600)
+        os.replace(tmp, certificate)
+        # Publish the checksum list last. Any interruption/mismatch falls back.
+        tmp = manifest.with_suffix('.tmp')
+        tmp.write_text(''.join(f'{sha(path)}  {path}\n' for path in [recipe, certificate, *paths]))
+        tmp.chmod(0o600)
+        os.replace(tmp, manifest)
+        # verify_revision above checked every byte before publishing this cache.
+        (self.root / 'normal-boot-audit.failed').unlink(missing_ok=True)
+        syncdir(self.root)
+
+    def audit_normal_boot(self, verifier='/usr/bin/slot-verify'):
+        """Read-only full audit; defer repair to the existing next-launch path."""
+        try:
+            with self.locked():
+                state = self.state()
+                if state['pending'] is not None:
+                    return {'status': 'skipped', 'reason': 'pending-trial'}
+                try:
+                    result = subprocess.run([verifier, '--all', str(self.root)],
+                                            capture_output=True, timeout=60)
+                    valid = result.returncode == 0
+                except (OSError, subprocess.TimeoutExpired):
+                    valid = False
+                failure = self.root / 'normal-boot-audit.failed'
+                if valid:
+                    failure.unlink(missing_ok=True)
+                    self.event('normal-boot-audit-passed', version=state['current'])
+                else:
+                    atomic_json(failure, {'schema': 1, 'version': state['current'],
+                                         'detected': time.time()})
+                    self.event('normal-boot-audit-failed', version=state['current'])
+                return {'status': 'passed' if valid else 'failed',
+                        'version': state['current']}
+        except UpdateBusy:
+            # Contention is not corrupt data. Never flag a simultaneous update.
+            return {'status': 'skipped', 'reason': 'updater-busy'}
+
+    def run(self):
+        name, trial = self.select()
+        if not trial:
+            with self.locked():
+                self.try_cache_normal_boot(name)
+        system = self.revision(name) / 'System'
+        env = dict(os.environ)
+        env['SLOT_CORE_DIR'] = str(system)
+        core_hashes = self.core_hashes(system, self.verify_revision(name))
+        env.pop('SLOT_CORE_HASHES', None)
+        if core_hashes is not None:
+            env['SLOT_CORE_HASHES'] = core_hashes
+        env.setdefault('SDL_VIDEODRIVER', 'kmsdrm')
+        env.setdefault('SDL_KMSDRM_REQUIRE_DRM_MASTER', '1')
+        env.setdefault('XDG_RUNTIME_DIR', '/run/0-runtime-dir')
+        content = Path(env.get('SLOT_ROOT', '/storage/slotcontent'))
+        require(content.is_mount(), 'Slot content partition is not mounted')
+        ready = RUN_DIRECTORY / ('slot-update-' + uuid.uuid4().hex + '.ready')
+        if trial:
+            env['SLOT_UPDATE_READY'] = str(ready)
+        self.event('starting', version=name, trial=trial)
+        child = subprocess.Popen(['sh', str(system / 'launch_frontend.sh')], cwd=content, env=env)
+        def forward(sig, _frame):
+            if child.poll() is None:
+                child.send_signal(sig)
+        old_handlers = {s: signal.signal(s, forward) for s in (signal.SIGTERM, signal.SIGINT)}
+        start = time.monotonic()
+        healthy_since = None
+        failed = False
+        try:
+            while child.poll() is None:
+                if not trial:
+                    child.wait()
+                    break
+                if trial:
+                    try:
+                        fresh = 0 <= time.time() - ready.stat().st_mtime < HEARTBEAT_AGE
+                    except OSError:
+                        fresh = False
+                    healthy_since = (healthy_since or time.monotonic()) if fresh else None
+                    if healthy_since is not None and time.monotonic() - healthy_since >= HEALTH_WINDOW:
+                        self.confirm(name)
+                        trial = False
+                    elif time.monotonic() - start >= STARTUP_TIMEOUT:
+                        failed = True
+                        child.terminate()
+                        try:
+                            child.wait(timeout=3)
+                        except subprocess.TimeoutExpired:
+                            child.kill()
+                        break
+                time.sleep(0.25)
+            result = child.wait()
+            if trial:
+                self.rollback()
+                # Startup failure is retried by systemd using the known working version.
+                return 1
+            return 1 if failed else result
+        finally:
+            ready.unlink(missing_ok=True)
+            for sig, handler in old_handlers.items():
+                signal.signal(sig, handler)
+
+
+def package(system, base_path, kind, version, output, states_compatible=False, delta=False):
+    require(bool(SAFE_ID.fullmatch(version)), 'Invalid package id')
+    base = load(base_path)
+    require((Path(system) / 'update-contract.json').is_file(), 'Build has no explicit update compatibility declaration')
+    declared = contract(system)
+    require(declared['config'] == base['compat']['config'] and declared['sram'] == base['compat']['sram'],
+            'Build requires a settings/save migration')
+    modules = module_policy(system)
+    require(module_selection(modules) == module_selection(base.get('modules')), 'Build changes installed module selection')
+    module_files(system, base.get('modules'), excluded_only=True)
+    inventory = files(system)
+    require(installed_cores(system)==set(base['compat']['states']), 'Package must preserve installed emulators')
+    require(CORES & inventory.keys()==installed_cores(system), 'Package contains an unselected emulator')
+    selected = {n: v for n, v in inventory.items() if core_file(n) == (kind == 'cores')}
+    target = {n: v for n, v in base['files'].items() if core_file(n) != (kind == 'cores')}
+    target.update(selected)
+    if kind == 'slot':
+        require(all(inventory[n]['sha256'] == base['files'][n]['sha256'] for n in declared['states']),
+                'Frontend package must use the installed cores')
+    else:
+        changed = any(inventory[n]['sha256'] != base['files'][n]['sha256'] for n in declared['states'])
+        require(not changed or states_compatible,
+                'Core versions changed: verify state compatibility before using --states-compatible')
+    meta = {'schema': 1, 'id': version, 'kind': kind, 'target': {'device': 'rg353v', 'arch': 'aarch64'},
+            'base': base['id'], 'runtime': base['runtime'], 'compat': base['compat'], 'files': selected,
+            'target_sha256': inventory_hash(target),
+                'modules': modules if kind == 'slot' else base.get('modules')}
+    payload = selected
+    if delta:
+        payload = {n: v for n, v in selected.items() if base['files'].get(n) != v}
+        removed = sorted(set(component_files(base['files'], kind)) - set(selected))
+        require(bool(payload) or bool(removed), 'Delta contains no changes')
+        meta.update(schema=2, base_sha256=inventory_hash(base['files']), changed=payload, removed=removed)
+    output = Path(output)
+    require(not output.exists(), 'Output already exists')
+    tmp = output.with_name(output.name + '.partial')
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            manifest = Path(d) / 'manifest.json'
+            atomic_json(manifest, meta)
+            with tarfile.open(tmp, 'w:gz') as archive:
+                archive.add(manifest, arcname='manifest.json', recursive=False)
+                for name in sorted(payload):
+                    archive.add(Path(system) / name, arcname='payload/' + name, recursive=False)
+        with tmp.open('rb') as stream:
+            os.fsync(stream.fileno())
+        tmp.replace(output)
+        syncdir(output.parent)
+        digest = sha(output)
+        output.with_name(output.name + '.sha256').write_text(digest + '  ' + output.name + '\n')
+        print(json.dumps({'package': str(output), 'sha256': digest, 'id': version}), flush=True)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--root', type=Path, default=Path('/storage/slot-manager'))
+    sub = parser.add_subparsers(dest='command', required=True)
+    adopt = sub.add_parser('adopt')
+    adopt.add_argument('system', type=Path)
+    adopt.add_argument('--id', required=True)
+    make = sub.add_parser('package')
+    make.add_argument('--system', type=Path, required=True)
+    make.add_argument('--base', type=Path, required=True)
+    make.add_argument('--kind', choices=['slot', 'cores'], required=True)
+    make.add_argument('--id', required=True)
+    make.add_argument('--output', type=Path, required=True)
+    make.add_argument('--states-compatible', action='store_true',
+                      help='Core package only: builder attests existing states are compatible after regression testing')
+    make.add_argument('--delta', action='store_true', help='Send only changed files and explicit deletions')
+    for name in ('check', 'install'):
+        cmd = sub.add_parser(name)
+        cmd.add_argument('package', type=Path)
+        cmd.add_argument('--sha256', required=True)
+    for name in ('status', 'rollback', 'run', 'audit'):
+        sub.add_parser(name)
+    args = parser.parse_args()
+    if args.command == 'package':
+        package(args.system, args.base, args.kind, args.id, args.output, args.states_compatible, args.delta)
+        return
+    require(args.root.resolve() != Path('/storage')
+            and args.root.resolve().is_relative_to(Path('/storage'))
+            and not args.root.resolve().is_relative_to(Path('/storage/slotcontent')),
+            'Updater storage must be on system storage, outside the content partition')
+    require(Path('/storage').is_mount(), 'System storage is not mounted')
+    manager = Manager(args.root)
+    manager.env()
+    require(manager.root.stat().st_dev == Path('/storage').stat().st_dev,
+            'Updater revisions must be on system storage, not a nested content mount')
+    if args.command in ('install', 'rollback', 'adopt'):
+        ensure_stopped()
+    if args.command == 'adopt':
+        manager.adopt(args.system, args.id)
+    elif args.command == 'status':
+        print(json.dumps(manager.state(), indent=2))
+    elif args.command == 'check':
+        with manager.locked():
+            archive, meta = manager.check_package(args.package, args.sha256)
+            archive.close()
+            print(json.dumps(meta, indent=2))
+    elif args.command == 'install':
+        manager.install(args.package, args.sha256)
+    elif args.command == 'rollback':
+        manager.rollback()
+    elif args.command == 'audit':
+        result = manager.audit_normal_boot()
+        print(json.dumps(result), flush=True)
+        return 1 if result['status'] == 'failed' else 0
+    elif args.command == 'run':
+        if not manager.state_path.exists():
+            profile = load('/usr/share/slot/os-profile.json')
+            require(profile.get('device') == 'rg353v' and profile.get('slot_update_api') == API, 'Unsupported factory updater profile')
+            manager.adopt('/usr/share/slot/System', 'factory-' + profile['layer_sha256'][:12])
+        return manager.run()
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (UpdateError, OSError, ValueError, KeyError, tarfile.TarError) as error:
+        print('Slot update stopped: ' + str(error), file=sys.stderr)
+        sys.exit(1)

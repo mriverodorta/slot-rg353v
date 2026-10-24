@@ -1,0 +1,12 @@
+[Unit]
+Description=Use prebuilt Slot hardware database or changed user overrides
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=sysinit.target systemd-update-done.service shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/slot-hwdb
+TimeoutSec=90s

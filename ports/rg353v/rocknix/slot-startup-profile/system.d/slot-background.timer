@@ -1,0 +1,10 @@
+[Unit]
+Description=Complete deferred setup if Slot has not displayed a frame
+
+[Timer]
+OnBootSec=20s
+AccuracySec=1s
+Unit=slot-background.service
+
+[Install]
+WantedBy=rocknix.target

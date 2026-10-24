@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fixed RK817 analog routing; Slot owns software volume and mute.
+# Starts only after the first shelf frame; no desktop/external audio routing.
+exec /usr/bin/slot-audio-route

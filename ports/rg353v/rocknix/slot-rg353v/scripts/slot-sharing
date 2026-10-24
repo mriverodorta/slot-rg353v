@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Control Slot SMB sharing without changing wireless, SSH, or content."""
+import argparse
+import configparser
+import contextlib
+import fcntl
+import ipaddress
+import os
+from pathlib import Path
+import socket
+import subprocess
+import sys
+
+
+class SharingError(Exception):
+    pass
+
+
+def command(args):
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise SharingError('File sharing tools did not respond') from error
+
+
+class Controller:
+    def __init__(self, storage=Path('/storage'), run=command, address=None):
+        self.storage = Path(storage)
+        self.run = run
+        self.address = address or self.local_address
+        self.config = self.storage / '.config/system/configs/system.cfg'
+        self.disabled = self.storage / '.cache/services/samba.disabled'
+        self.share = self.storage / '.config/ksmbd.conf'
+
+    @contextlib.contextmanager
+    def locked(self):
+        if Path("/run/slot-usb/active").exists():
+            raise SharingError("File sharing is paused for USB storage")
+        path = self.storage / '.cache/slot-sharing.lock'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            yield
+
+    @staticmethod
+    def sync(path):
+        fd = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+    def setting(self):
+        if self.storage == Path('/storage') and Path('/usr/share/slot/game-startup-v1').exists():
+            return '1' if Path('/run/slot-services/sharing.on').exists() else '0'
+        for line in reversed(self.config.read_text().splitlines()):
+            if line.startswith('samba.enabled='):
+                return line.partition('=')[2].strip()
+        return None
+
+    def save(self, value):
+        if self.storage == Path('/storage') and Path('/usr/share/slot/game-startup-v1').exists():
+            flag=Path('/run/slot-services/sharing.on');flag.parent.mkdir(parents=True,exist_ok=True)
+            if value == '1':flag.touch(mode=0o600)
+            else:flag.unlink(missing_ok=True)
+            return
+        # Use ROCKNIX's shared settings lock. Never rewrite the whole config or
+        # source user-supplied configuration as shell commands.
+        result = self.run([
+            '/bin/bash', '-c',
+            '. /etc/profile.d/001-functions && set_setting samba.enabled "$1" && '
+            'test "$(get_setting samba.enabled)" = "$2"',
+            'slot-sharing', 'default' if value is None else value,
+            '' if value is None else value,
+        ])
+        if result.returncode:
+            raise SharingError('Could not save file sharing setting')
+        self.sync(self.config)
+        self.sync(self.config.parent)
+
+    def marker(self, disabled):
+        self.disabled.parent.mkdir(parents=True, exist_ok=True)
+        if disabled:
+            self.disabled.touch()
+            self.sync(self.disabled)
+        else:
+            self.disabled.unlink(missing_ok=True)
+        self.sync(self.disabled.parent)
+
+    def active(self, unit):
+        return self.run(['systemctl', 'is-active', unit]).returncode == 0
+
+    def service(self, action, *units):
+        if action == 'start' and Path('/usr/share/slot/game-startup-v1').exists():
+            if self.run(['/usr/bin/slot-services','prepare','sharing']).returncode:
+                raise SharingError('Turn Wi-Fi or USB networking on before file sharing')
+        if self.run(['systemctl', action, *units]).returncode:
+            raise SharingError('Could not change file sharing service')
+
+    def access(self):
+        # Read the effective config, following ROCKNIX's /run -> /etc -> user
+        # config links. Values are data; no credentials are returned to the UI.
+        path = Path('/run/ksmbd/ksmbd.conf') if self.storage == Path('/storage') else self.share
+        conf = configparser.ConfigParser(interpolation=None, strict=False)
+        try:
+            conf.read(path)
+            sections = {name.lower(): name for name in conf.sections()}
+            share = conf[sections['slot']]
+            global_conf = conf[sections['global']]
+            available = share.get('available', 'yes').strip().lower() not in ('no', 'false', '0')
+            guest = share.get('guest ok', share.get('public', 'no')).strip().lower() in ('yes', 'true', '1')
+            guest = guest and global_conf.get('map to guest', 'Never').strip().lower() != 'never'
+            return available, 'Guest' if guest else 'Login required'
+        except (KeyError, configparser.Error, OSError):
+            return False, 'Unavailable'
+
+    def local_address(self):
+        # UDP connect only selects a route; no packet is sent.
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as connection:
+                connection.connect(('1.1.1.1', 9))
+                address = connection.getsockname()[0]
+                if not ipaddress.ip_address(address).is_loopback:
+                    return address
+        except OSError:
+            pass
+        # BusyBox ip does not support JSON. Handle LANs with no default route.
+        result = self.run(['ip', '-o', '-4', 'addr', 'show'])
+        for line in result.stdout.splitlines():
+            fields = line.split()
+            if 'inet' in fields:
+                try:
+                    address = ipaddress.ip_interface(fields[fields.index('inet') + 1]).ip
+                    if not address.is_loopback and not address.is_link_local:
+                        return str(address)
+                except (ValueError, IndexError):
+                    pass
+        return ''
+
+    def status(self):
+        enabled = self.setting() == '1' and not self.disabled.exists()
+        running = self.active('slot-sharing.service')
+        available, access = self.access()
+        address = self.address()
+        if not enabled:
+            state = 'Stopping' if running else 'Off'
+        elif not available:
+            state = 'Share unavailable'
+        elif not running:
+            state = 'Service stopped'
+        elif not address:
+            state = 'Waiting for network'
+        else:
+            state = 'Running'
+        return {'protocol': '1', 'enabled': str(int(enabled)), 'running': str(int(running)),
+                'state': state, 'access': access,
+                'address': 'smb://' + address + '/Slot' if address and available else '--'}
+
+    def set(self, enabled):
+        old = self.setting()
+        marker = self.disabled.exists()
+        services = {name: self.active(name) for name in ('slot-sharing.service',)}
+        try:
+            self.save('1' if enabled else '0')
+            self.marker(not enabled)
+            self.service('start' if enabled else 'stop', 'slot-sharing.service')
+            if self.active('slot-sharing.service') != enabled:
+                raise SharingError('File sharing did not reach the requested state')
+        except (SharingError, OSError):
+            # Restore only the setting and services owned by this operation.
+            try:
+                self.save(old)
+                self.marker(marker)
+                for name, active in services.items():
+                    self.service('start' if active else 'stop', name)
+            except (SharingError, OSError) as error:
+                raise SharingError('Sharing change failed; check the service over SSH') from error
+            raise SharingError('Sharing change failed; previous setting restored')
+        return self.status()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest='command', required=True)
+    commands.add_parser('status')
+    change = commands.add_parser('set')
+    change.add_argument('state', choices=['on', 'off'])
+    args = parser.parse_args()
+    controller = Controller()
+    try:
+        with controller.locked():
+            result = controller.status() if args.command == 'status' else controller.set(args.state == 'on')
+        for name, value in result.items():
+            print(name + '\t' + value)
+    except (SharingError, OSError):
+        # Never print Samba credentials or subprocess diagnostics in the UI.
+        print('File sharing request failed; previous setting was retained or needs service recovery', file=sys.stderr)
+        raise SystemExit(1)
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,67 @@
+# Preparing a public release
+
+Image creation does not publish anything. The earlier inherited RG SP/H700 automatic publisher has been removed from this project's workflows. No GitHub repository, Wiki or Release is created by the local build command.
+
+## Before publication
+
+1. Retain Perfect's original/adaptation ownership, provenance and no-license-specified notice in source, binaries and README, as explicitly directed by the project owner. See [Credits](../CREDITS.md). Attribution does not establish permission or license the artwork under the project's GPL terms.
+2. Choose a version and freeze the source, exact upstream locks and device layer. Include the final repository commit in the release record.
+3. Build with `build-release.sh`. Use a fresh directory under `release/`, not a renamed private image. Public composition rejects private provisioning and localdev input paths.
+4. Inspect the composed boot/system/module payloads for credentials, authorized keys, seeded server identities and personal content. Include licenses and corresponding sources for the distributed frontend, patched cores and OS packages as required. Verify source packages actually match the binaries.
+5. Flash the candidate to the temporary SD. Validate Minimal, Recommended, Full and Custom installations, dynamic menus, partition expansion and chosen content-access routes. Full must select the complete current module catalog, including newly added features. Keep eMMC protected during SD tests.
+6. Qualify GB/GBC/GBA, battery saves, manual states, resume, overlays/shaders, input, audio/headphones, screenshots/Gallery, USB storage/networking, Wi-Fi and sleep/wake. Test cold boots separately from software restarts. Measure startup using a stated timing origin.
+7. Validate eMMC installation and F-held recovery only with an authorized device backup. A working prior development build does not automatically qualify a newly composed image.
+8. Archive validation records with the exact image checksum. Retain the current public candidate plus three previous versions; do not overwrite paths while someone is flashing.
+9. Upload only the selected **public** `.img.gz`, checksum, notes and corresponding-source materials once the repository is ready. Publish the wiki from the reviewed version-controlled documentation.
+
+## Repeatable privacy inspection
+
+Run the read-only source audit against the exact source snapshot chosen for publication, keeping the report outside that tree:
+
+```sh
+python3 scripts/audit-rg353v-release.py source \
+  --root /path/to/clean-source \
+  --output /path/to/validation/source-privacy.json
+```
+
+For owner-only checks, `--private-profile localdev/provisioning/slot-setup-debug.json` also checks for the actual provisioning values without putting matched values in the report. Never pass a private key file. A public builder does not need that profile.
+
+Use `tree` instead of `source` on each extracted image filesystem and every composed module payload. It checks for seeded Wi-Fi profiles/SSH identities, private key material and personal content. The JSON records file hashes and explicitly lists compressed files it has **not** opened. Passing this check on source files does not inspect Git history or prove that a compressed image and its nested module payloads are clean. Keep the complete extraction/inspection record with the exact candidate checksum; source/license and hardware qualification remain separate checks.
+
+## Existing qualification
+
+The latest same-build storage comparison used all 23 modules and the same 81-game TF2 library, active progress and settings. Internal eMMC controlled restarts were **4.310, 4.292 and 4.284 s** (4.295 s average); TF1 microSD restarts were **5.286, 5.160 and 5.125 s** (5.190 s average). This supports describing current startup as about **4.2–4.3 s from eMMC**, or **5.2 s from the tested SD card**, with SD timing depending on card speed and quality. All six runs passed boot/runtime/storage checks with all 85 progress files unchanged. These measure Linux entry to first shelf, excluding U-Boot and physical Power/rumble; they do not requalify a fresh public image. See [exact conditions](Boot-and-Recovery.md#latest-controlled-restarts).
+
+An earlier eMMC component qualification ran all 22 installed modules with the only game library and active progress on TF1. Three controlled Linux-entry-to-populated-shelf restarts were **4.48, 4.47 and 4.51 seconds** (4.487 s average), versus a rechecked 4.923 s baseline. Saves/states and remembered selection matched before/after checks; Wi-Fi returned each time. This did not measure physical Power-to-game or cold-boot time. See [historical conditions](Boot-and-Recovery.md#earlier-emmc-controlled-restarts). Later frontend refinements were tested on a TF1 system with a TF2 library and 23 modules; their separate before/after sets are recorded in the same guide.
+
+The 23 October documentation review corrected Diagnostics' legacy File Sharing service key and refreshed native-resolution screens, including System/Game save-location choices and the in-game Power menu. This reporting-only change still belongs in the exact final image's regression check.
+
+The 23 October build 2 private Full installation has also been checked with the system on TF1 and the 81-game library on TF2, using **Save location → Game**. The owner confirmed Zelda loaded successfully. Device checks matched all 56 runtime files to the composed candidate, verified all 23 modules, confirmed 512 MiB boot/system partitions and retired installer workspace, and found no failed services. TF1 system-card ejection was rejected; TF2 write/read, safe eject and remount passed with all 85 save/state files unchanged. Re-emitting a kernel block-add event exercised automatic scan start/completion. The owner then safely ejected, physically removed and reinserted TF2: the scanning message appeared and games returned automatically. Broader hardware regression and the exact public installation remain separate checks. eMMC was left unmounted and unchanged.
+
+The subsequent device regression found broken ksmbd command aliases in build 2: they referenced `usr/libexec/ksmbd.tools`, while ROCKNIX installed the executable in `usr/lib/ksmbd.tools`. The package recipe now checks the executable and creates aliases to its actual location, with a staged-package regression test. A reversible service workaround on the private SD passed Wi-Fi and USB SMB transfers. The original build 2 image remains unsuitable for publication; rebuild and inspect the corrected image rather than treating the device workaround as an image fix.
+
+Further private TF1 qualification passed signed three-step component catch-up, explicit rollback, and automatic rollback after a deliberately failing launcher. The original factory revision, feed and downloads were restored, with all 85 progress files unchanged. USB networking passed SSH, two-way file transfer and SMB with Wi-Fi off; actual TF1 USB mass storage passed exclusive ownership, Unicode file transfer, safe eject, shelf return and USB SSH recovery. The owner confirmed three cold boots reached the shelf. Only the latest Linux-entry-to-shelf timing was retained (5.92 s); no three-run average or comparison with the eMMC timings is claimed. These component and USB checks preceded the OS qualification below.
+
+The corrected build 3 images subsequently passed host inspection: 23 public filesystem/module/preset trees, four real-payload installer compositions, executable SMB aliases, fresh kernel-initramfs binding, matching private/public runtime payloads, and userspace dependency checks. Its full SYSTEM was then installed on TF1 through a signed 2,185,324-byte OS delta. Real reboot continuation passed despite eight deliberate feed failures, followed automatically by a component update. The disposable component and temporary feed were removed; the corrected OS stayed on TF1. Native packaged SMB passed a Unicode file round trip with the workaround removed. All 85 progress files were preserved. Slot and both emulator binaries are identical to the earlier full feature-regression binaries. The final corrected-image clean installation and source/license closure still precede publication.
+
+After the owner's first physical sleep/wake check, the handheld was later found powered off. Its previous volatile log was unavailable, so the cause is unproven. With temporary persistent logging enabled, a normal shelf sleep/wake repeat remained awake and connected for more than four minutes, beyond the configured three-minute sleep shutdown threshold. No repeated power-off, stuck wake alarm or failed service was observed. Retain this observation in qualification notes rather than treating the original cause as established.
+
+| Remaining release check | Status |
+| --- | --- |
+| Perfect images and palette notices | Owner directed inclusion with original/adaptation copyright, provenance and explicit no-license-specified notice; no permission is claimed |
+| Exact public candidate installation | Pending: current device results are development/component qualifications |
+| Clean-clone full source build | Passed on 23 October 2026 with ARM64 Docker/Python 3.12; the complete public wrapper produced `rc-20261023-build1` from pinned public sources |
+| Matching source and license bundle | Audit exact final bootloader, kernel, firmware, GPU, frontend and core inputs, notices and source assets |
+| OTA publication configuration | Factory feed and publisher public key prepared for `mriverodorta/slot-rg353v`; live component catch-up, both rollback paths and real OS-reboot continuation with delayed feed availability passed on private TF1. Dedicated OTA hosting and final public-candidate qualification remain pending |
+| Release privacy inspection | Passed for corrected build 3 candidate SHA-256 `7d74b3cffa20bd1316a2c32f9032771208e3e044a06c7316ec8768a9906ca702`: boot, kernel initramfs, system, every module, all four preset outputs, nested font/gpSP archives and matching Slot source archive; this is a host inspection, not a clean installation of that exact image |
+| Physical compatibility | Recheck cold startup, SD/eMMC/F recovery and the advertised connection/feature paths on the final candidate; qualify host combinations before advertising them |
+
+A freshly packaged public/private image must not inherit an unperformed clean-install or physical-validation claim.
+
+The full source-build wrapper has passed clean-clone compilation, checks, composition and checksum verification. Minimal, Recommended, Full and a gpSP-only Custom selection also passed host composition and inventory checks against its actual payloads. Physical installation remains a separate qualification step. Public release status remains **candidate / not published** until the remaining build, source/license and candidate-qualification checks are closed.
+
+## Matching sources and on-device archives
+
+For component archives, signed catalogs, exact-base/module variants, bootstrap readers and GitHub Release asset hosting, see [OTA updates](OTA-Updates.md). Retain qualified full OS capsules on the build host to generate patches; users need download only their selected patch. Corresponding-source obligations apply to OTA assets as well as full images.
+
+Every downloadable image and OTA component must link to its immutable matching source tag and the corresponding modified sources/build scripts required by its license. For Slot, GPLv3 section 6(d) allows equivalent source access alongside a binary download; the source need not occupy the device image. A versioned repository or separate matching source asset may provide that access. Pins and patches must resolve to the complete matching source, not merely refer to an unmodified upstream project. Retain license/copyright notices in the image. Slot packaging now writes the matching archive to `dist-rg353v/Sources/slot-source.tar.gz` outside `System`. Source builds attach it beside the image; fast composition can supply it with `--source-archive`. The source asset and immutable matching tag must be linked from the eventual image/OTA release. Check the kernel, cores and other packages under their own licenses too. See [GNU GPL FAQ](https://www.gnu.org/licenses/gpl-faq.en.html).

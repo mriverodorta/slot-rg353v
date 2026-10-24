@@ -1,0 +1,8 @@
+#!/bin/sh
+# USB-C gadget/charging stays built in. Only the independent USB 2 host drivers wait.
+set -eu
+test -e /run/slot-boot/frontend.displayed
+modprobe ehci_platform
+modprobe ohci_platform
+read -r uptime _ < /proc/uptime
+printf 'Deferred EHCI/OHCI hosts ready at %s\n' "$uptime"

@@ -1,0 +1,62 @@
+#!/bin/sh
+# Keep the existing hardware-setup boost through the first visible Slot frame.
+# Supported governor only; never change frequency limits, voltage or settings.
+set -eu
+policy=/sys/devices/system/cpu/cpufreq/policy0
+pending=/run/slot-boot/cpu-governor
+frame=/run/slot-boot/frontend/first-frame
+restore_policy() {
+  # Optional preference is read only when the boost ends, after scanout.
+  # Both manifests must permit it; stale On preferences cannot bypass setup.
+  optional=yes
+  for manifest in /usr/share/slot/features-v1 /storage/.config/slot/features-v1; do
+    if [ -e "$manifest" ]; then
+      header=
+      IFS= read -r header <"$manifest" || :
+      if [ "$header" != slot-features-v1 ] || ! grep -qx schedutil-governor "$manifest"; then optional=no; fi
+    fi
+  done
+  if [ "$governor" = ondemand ] && [ "$optional" = yes ] &&
+     grep -qx 'schedutil_governor=1' /storage/slotcontent/Config/slot.state 2>/dev/null &&
+     grep -qw schedutil "$policy/scaling_available_governors"; then
+    governor=schedutil
+  fi
+  printf '%s\n' "$governor" >"$policy/scaling_governor"
+  # The frontend can reach scanout before this deferred governor transition.
+  # Set its intended RK3566 cadence after selecting ondemand, not before it.
+  if [ "$governor" = ondemand ]; then
+    sampling=/sys/devices/system/cpu/cpufreq/ondemand/sampling_rate
+    if [ -w "$sampling" ]; then printf '20000\n' >"$sampling"; fi
+  fi
+}
+release() {
+  [ -f "$pending" ] || return 0
+  read -r governor <"$pending"
+  case "$governor" in ondemand|powersave|performance|schedutil) ;; *) exit 1 ;; esac
+  restore_policy
+  rm -f "$pending"
+}
+expired() {
+  read -r uptime rest </proc/uptime
+  [ "${uptime%%.*}" -ge 20 ]
+}
+case "${1:-}" in
+  defer)
+    [ "$#" = 2 ] || exit 2
+    governor=$2
+    case "$governor" in ondemand|powersave|performance|schedutil) ;; *) exit 1 ;; esac
+    # Manual hardware restarts and slow/failing boots get the normal policy.
+    if [ -e "$frame" ] || expired; then
+      restore_policy
+      exit 0
+    fi
+    umask 077
+    mkdir -p /run/slot-boot
+    printf '%s\n' "$governor" >"$pending.tmp"
+    mv -f "$pending.tmp" "$pending"
+    # Cover a first-frame/deadline event racing the publication of this file.
+    if [ -e "$frame" ] || expired; then release; fi
+    ;;
+  release) release ;;
+  *) exit 2 ;;
+esac

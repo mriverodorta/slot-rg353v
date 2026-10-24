@@ -1,0 +1,15 @@
+[Unit]
+Description=Slot opt-in USB Ethernet
+After=storage.mount
+Requires=storage.mount
+Before=umount.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/slot-usb-network setup
+ExecStart=/usr/bin/slot-usb-network serve
+ExecStopPost=/usr/bin/slot-usb-network cleanup
+TimeoutStartSec=40
+TimeoutStopSec=35
+StandardOutput=journal
+StandardError=journal

@@ -1,0 +1,9 @@
+[Unit]
+Description=Audit the complete confirmed Slot revision after the shelf
+ConditionPathExists=/run/slot-boot/frontend/first-frame
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/slot-update audit
+Nice=19
+IOSchedulingClass=idle

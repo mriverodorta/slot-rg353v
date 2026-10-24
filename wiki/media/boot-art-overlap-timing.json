@@ -1,0 +1,91 @@
+{
+  "date": "2026-10-23",
+  "clock": "Linux entry to first shelf swap",
+  "conditions": {
+    "clock": "Linux entry to first scene swap; no button/rumble/optical-panel timing",
+    "boot": "controlled software restart with F released",
+    "system": "TF1",
+    "library": "TF2, 81 games",
+    "usb_networking": "Off, including developer autostart",
+    "developer_mode": "On",
+    "save_location": "Game",
+    "schedutil": "Off; ondemand 20 ms after shelf",
+    "collection": "heavy profiling after the shelf; RAM-only before host retrieval",
+    "unchanged": [
+      "kernel",
+      "OS image",
+      "emulator cores",
+      "selected modules",
+      "remembered cartridge",
+      "settings"
+    ],
+    "eMMC": "never mounted or written in this pass"
+  },
+  "before": {
+    "runs": [
+      {
+        "run": 1,
+        "scene_s": 5.177412793,
+        "frontend_s": 1.023883583,
+        "art_wait_s": 0.32427850000000014
+      },
+      {
+        "run": 2,
+        "scene_s": 5.269075668,
+        "frontend_s": 1.0216077080000003,
+        "art_wait_s": 0.32849804199999966
+      },
+      {
+        "run": 3,
+        "scene_s": 5.16759471,
+        "frontend_s": 1.0344308340000001,
+        "art_wait_s": 0.328394791
+      }
+    ],
+    "mean_scene_s": 5.204694390333334,
+    "mean_frontend_s": 1.0266407083333335,
+    "mean_art_wait_s": 0.32705711099999996,
+    "mean_stages_ms": {
+      "Kernel entry \u2192 initramfs /init": 1092.978,
+      "Initramfs \u2192 systemd": 890.821,
+      "systemd \u2192 Slot service": 1824.912,
+      "Slot launcher \u2192 Rust entry": 369.3426820000001,
+      "Slot frontend \u2192 first scene swap": 1026.6407083333336
+    }
+  },
+  "after": {
+    "runs": [
+      {
+        "run": 1,
+        "scene_s": 5.102384668,
+        "frontend_s": 0.9044280010000003,
+        "art_wait_s": 0.28373420800000027
+      },
+      {
+        "run": 2,
+        "scene_s": 5.308630418,
+        "frontend_s": 0.9038583749999995,
+        "art_wait_s": 0.2964065420000006
+      },
+      {
+        "run": 3,
+        "scene_s": 5.177275126,
+        "frontend_s": 0.8921526249999996,
+        "art_wait_s": 0.2902418750000004
+      }
+    ],
+    "mean_scene_s": 5.196096737333333,
+    "mean_frontend_s": 0.9001463336666665,
+    "mean_art_wait_s": 0.2901275416666671,
+    "mean_stages_ms": {
+      "Kernel entry \u2192 initramfs /init": 1088.5476666666666,
+      "Initramfs \u2192 systemd": 966.8273333333334,
+      "systemd \u2192 Slot service": 1870.5296666666668,
+      "Slot launcher \u2192 Rust entry": 370.04573699999986,
+      "Slot frontend \u2192 first scene swap": 900.1463336666665
+    }
+  },
+  "observed_total_difference_ms": 8.597653000000705,
+  "frontend_difference_ms": 126.49437466666701,
+  "interpretation": "Frontend initialization consistently improved; three-run total boot means are essentially unchanged. Pre-frontend initramfs/systemd variation offset the saving. Scan join elapsed time now overlaps graphics and is not additional serial main-thread time."
+}

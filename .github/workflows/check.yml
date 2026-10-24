@@ -1,0 +1,48 @@
+name: RG353V build contracts
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 scripts/test-project-layout.py
+      - run: python3 scripts/test-rg353v-container.py
+      - run: python3 scripts/test-rg353v-bootloader-build.py
+      - run: python3 scripts/test-rg353v-release-audit.py
+      - run: python3 scripts/test-rg353v-wiki-export.py
+      - run: python3 scripts/test-rg353v-build-image.py
+      - run: python3 scripts/test-rg353v-profile-audit.py
+      - run: python3 scripts/test-rg353v-services.py
+      - run: python3 scripts/test-rg353v-ota-session.py
+      - run: python3 scripts/check-rg353v-wiki.py
+      - run: python3 scripts/test-rg353v-workflow.py
+      - run: python3 scripts/test-rg353v-module-cleanup.py
+      - run: python3 scripts/test-rg353v-setup-presets.py
+      - run: python3 scripts/test-rg353v-emmc.py
+      - run: python3 scripts/test-rg353v-clean-image.py
+      - run: python3 scripts/test-rg353v-setup.py
+      - run: python3 scripts/test-rg353v-modules.py
+      - run: python3 scripts/test-rg353v-module-install.py
+      - run: python3 scripts/test-rg353v-setup-renderer.py
+      - run: python3 scripts/test-rg353v-startup.py
+      - run: sudo apt-get update && sudo apt-get install -y libblkid-dev exfatprogs
+      - run: python3 scripts/test-rg353v-content-probe.py
+      - run: python3 scripts/test-rg353v-sd-library.py
+      - run: python3 scripts/test-rg353v-personal-library.py
+      - run: python3 scripts/test-rg353v-sd-library-boot.py
+      - run: python3 scripts/test-rg353v-usb-storage.py
+      - run: python3 scripts/test-rg353v-image-prune.py
+      - run: python3 scripts/test-rg353v-appliance-prune.py
+      - run: python3 scripts/test-rg353v-ksmbd.py
+      - run: python3 scripts/test-rg353v-os-package.py
+      - run: python3 scripts/test-rg353v-updates.py
+      - run: python3 scripts/test-rg353v-os-updates.py
+      - run: python3 scripts/test-rg353v-ota.py

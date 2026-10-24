@@ -1,0 +1,60 @@
+#!/usr/bin/python3
+"""Use the factory hardware database; cache compilations of actual user overrides."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def prepare(factory=Path('/usr/share/slot/hardware/profile.json'),
+            overrides=Path('/etc/udev/hwdb.d'), cache=Path('/storage/.cache/slot-hwdb'),
+            runtime=Path('/run/hwdb.bin'), compile_db=None):
+    profile = json.loads(factory.read_text())
+    actual = {p.name: ('masked' if p.is_symlink() and p.resolve() == Path('/dev/null') else sha(p))
+              for p in sorted(overrides.glob('*.hwdb')) if p.is_file() or p.is_symlink()}
+    if actual == profile['default_overrides']:
+        runtime.unlink(missing_ok=True)
+        print('Using prebuilt RG353V hardware database')
+        return 'factory'
+    key = hashlib.sha256(json.dumps([profile['hwdb_sha256'], actual], sort_keys=True).encode()).hexdigest()
+    cache.mkdir(parents=True, exist_ok=True, mode=0o700)
+    database, metadata = cache / 'hwdb.bin', cache / 'state.json'
+    try:
+        state = json.loads(metadata.read_text())
+        valid = state['key'] == key and state['sha256'] == sha(database)
+    except (OSError, ValueError, KeyError):
+        valid = False
+    runtime.unlink(missing_ok=True)
+    if not valid:
+        if compile_db:
+            compile_db(runtime)
+        else:
+            subprocess.run(['/usr/bin/systemd-hwdb', 'update'], check=True)
+        if runtime.read_bytes()[:8] != b'KSLPHHRH':
+            raise ValueError('Invalid generated hardware database')
+        for path, data in ((database, runtime.read_bytes()),
+                           (metadata, json.dumps({'key': key, 'sha256': sha(runtime)}).encode())):
+            fd, name = tempfile.mkstemp(prefix='.', dir=cache)
+            try:
+                with os.fdopen(fd, 'wb') as stream:
+                    stream.write(data); stream.flush(); os.fsync(stream.fileno())
+                os.replace(name, path)
+            finally:
+                if os.path.exists(name): os.unlink(name)
+        fd = os.open(cache, os.O_RDONLY)
+        try: os.fsync(fd)
+        finally: os.close(fd)
+    runtime.unlink(missing_ok=True)
+    runtime.symlink_to(database)
+    print('Using cached custom hardware database')
+    return 'cache'
+
+
+if __name__ == '__main__':
+    prepare()

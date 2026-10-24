@@ -1,0 +1,819 @@
+#!/usr/bin/env python3
+"""Signed RG353V update delivery over HTTPS (explicit LAN HTTP for development)."""
+import argparse
+import contextlib
+import hashlib
+import http.client
+import importlib.machinery
+import importlib.util
+import ipaddress
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.parse
+import urllib.request
+import urllib.error
+import uuid
+
+# Companion managers may live in a verified, writable frontend revision.
+# Importing them must never add cache files to that immutable inventory.
+sys.dont_write_bytecode = True
+
+def module(name):
+    path = Path(__file__).with_name(name)
+    if not path.exists():
+        path = path.with_suffix('.py')
+    if not path.exists():
+        path = Path('/usr/bin') / name
+    if not path.exists():
+        path = Path('/storage') / (name + '.py')
+    identity = 'slot_update_common' if name == 'slot-update' else name.replace('-', '_')
+    if identity in sys.modules:
+        return sys.modules[identity]
+    loader = importlib.machinery.SourceFileLoader(identity, str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    result = importlib.util.module_from_spec(spec)
+    sys.modules[identity] = result
+    loader.exec_module(result)
+    return result
+
+
+u = module('slot-update')
+LIMIT = 64 * 1024
+MAX_PACKAGE = 2 * 1024**3
+CONFIG = Path('/storage/.config/slot-updates.json')
+DEFAULT_CONFIG = Path('/usr/share/slot/update-feed.json')
+ROOT = Path('/storage/slot-downloads')
+KEYS = (Path('/usr/share/slot/update-keys'), Path('/storage/.config/slot-update-keys'))
+NETWORK_WAIT = 120
+HEALTH_WAIT = 120
+MAX_STEPS = 64
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    max_redirections = 4
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old=urllib.parse.urlsplit(req.full_url)
+        new=urllib.parse.urlsplit(urllib.parse.urljoin(req.full_url,newurl))
+        same_release=(old.hostname==new.hostname=='github.com' and
+                      old.path.split('/')[:3]==new.path.split('/')[:3] and
+                      '/releases/' in old.path and '/releases/' in new.path and not new.query)
+        asset=(old.hostname in ('github.com','release-assets.githubusercontent.com')
+               and new.hostname=='release-assets.githubusercontent.com'
+               and (old.hostname!='github.com' or '/releases/' in old.path))
+        u.require(old.scheme==new.scheme=='https' and new.port in (None,443)
+                  and not new.username and not new.password and not new.fragment
+                  and (same_release or asset), 'Untrusted update redirect refused')
+        return super().redirect_request(req,fp,code,msg,headers,urllib.parse.urlunsplit(new))
+
+
+def checked_url(url, development=False):
+    value = urllib.parse.urlsplit(url)
+    u.require(value.hostname and not value.username and not value.password
+              and not value.fragment and not value.query, 'Invalid update URL')
+    if value.scheme == 'http' and development:
+        try:
+            address = ipaddress.ip_address(value.hostname)
+            u.require(address.is_private and not address.is_unspecified and not address.is_link_local,
+                      'Development HTTP must use a private LAN IP')
+        except ValueError:
+            raise u.UpdateError('Development HTTP requires a literal LAN IP') from None
+    else:
+        u.require(value.scheme == 'https', 'Updates require HTTPS')
+    return url
+
+
+def open_url(url, headers=None, timeout=30):
+    request = urllib.request.Request(url, headers=headers or {})
+    return urllib.request.build_opener(NoRedirect).open(request, timeout=timeout)
+
+
+def fetch(url, limit, timeout=None):
+    with (open_url(url) if timeout is None else open_url(url, timeout=timeout)) as response:
+        raw = response.read(limit + 1)
+    u.require(len(raw) <= limit, 'Update metadata exceeds size limit')
+    return raw
+
+
+def verify_signature(raw, signature, keys):
+    u.require(len(signature) == 64, 'Invalid Ed25519 signature length')
+    with tempfile.TemporaryDirectory(prefix='slot-signature-') as temp:
+        p = Path(temp)
+        (p / 'metadata').write_bytes(raw)
+        (p / 'signature').write_bytes(signature)
+        for key in keys:
+            result = subprocess.run(['openssl', 'pkeyutl', '-verify', '-rawin', '-pubin',
+                                     '-inkey', str(key), '-sigfile', str(p / 'signature'),
+                                     '-in', str(p / 'metadata')], capture_output=True)
+            if result.returncode == 0:
+                return
+    raise u.UpdateError('Update publisher signature is not trusted')
+
+
+class Delivery:
+    def __init__(self, root=ROOT, config=CONFIG, keys=None):
+        self.root, self.config = Path(root), Path(config)
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.keys = list(keys) if keys is not None else [p for folder in KEYS for p in folder.glob('*.pem')]
+
+    def configuration(self):
+        # An explicit local feed wins, including its errors; never hide a broken
+        # override by silently switching publishers.
+        path = self.config if self.config.exists() else DEFAULT_CONFIG
+        return read_optional(path, {})
+
+    @contextlib.contextmanager
+    def locked(self):
+        with u.Manager(self.root / 'control').locked():
+            yield
+
+    def event(self, name, **values):
+        state = {'event': name, 'time': time.time(), **values}
+        u.atomic_json(self.root / 'status.json', state)
+        print(json.dumps(state), flush=True)
+
+    @staticmethod
+    def descriptor(p):
+        u.require(isinstance(p,dict) and isinstance(p.get('id'),str) and bool(u.SAFE_ID.fullmatch(p['id']))
+                  and p.get('kind') in ('os','slot','cores') and isinstance(p.get('sha256'),str)
+                  and bool(u.HASH.fullmatch(p['sha256'])) and type(p.get('size')) is int
+                  and 0 < p['size'] <= MAX_PACKAGE, 'Invalid package descriptor')
+        name=u.safe_path(p['file'])
+        u.require(len(name.parts)==1 and name.name.endswith('.tar.gz'), 'Package must be a relative archive filename')
+
+    @staticmethod
+    def applicable(p, installed, boot_files):
+        rule=p.get('requires')
+        u.require(isinstance(rule,dict) and rule.get('runtime') is not None, 'Missing update applicability rules')
+        allowed={'runtime','revision','inventory_sha256','modules'} if p['kind']!='os' else {'runtime','boot_files'}
+        u.require(set(rule)==allowed, 'Invalid update applicability rules')
+        if rule['runtime']!=installed['runtime']:return False
+        if p['kind']!='os':
+            return (rule['revision']==installed['id'] and rule['inventory_sha256']==u.inventory_hash(installed['files'])
+                    and rule['modules']==u.module_selection(installed.get('modules')))
+        u.require(isinstance(rule['boot_files'],dict) and bool(rule['boot_files']), 'Missing OS delta base files')
+        for name,info in rule['boot_files'].items():
+            if name not in boot_files:
+                path=module('slot-os-update').OSManager().boot_file(name)
+                boot_files[name]={'size':path.stat().st_size,'sha256':u.sha(path)}
+            if boot_files[name]!=info:return False
+        return True
+
+    @staticmethod
+    def at_head(rule, installed, boot_files):
+        u.require(isinstance(rule, dict) and {'runtime', 'revision'} <= set(rule)
+                  and set(rule) <= {'runtime', 'revision', 'modules', 'boot_files', 'inventory_sha256'}
+                  and ({'modules', 'inventory_sha256'} <= set(rule) or 'boot_files' in rule), 'Invalid catalog head')
+        if rule['runtime'] != installed['runtime'] or rule['revision'] != installed['id']:
+            return False
+        if 'modules' in rule and rule['modules'] != u.module_selection(installed.get('modules')):
+            return False
+        if 'inventory_sha256' in rule and rule['inventory_sha256'] != u.inventory_hash(installed['files']):
+            return False
+        if 'boot_files' in rule:
+            return Delivery.applicable({'kind': 'os', 'requires': {
+                'runtime': rule['runtime'], 'boot_files': rule['boot_files']}}, installed, boot_files)
+        return True
+
+    def check(self, timeout=None):
+        config = self.configuration()
+        u.require(isinstance(config.get('url'), str), 'OTA feed is not configured')
+        url = checked_url(config['url'], config.get('development_http') is True)
+        u.require(url.endswith('/release.json'), 'Feed URL must end in /release.json')
+        if timeout is None:
+            raw, signature = fetch(url, LIMIT), fetch(url + '.sig', 64)
+        else:
+            raw, signature = fetch(url, LIMIT, timeout), fetch(url + '.sig', 64, timeout)
+        verify_signature(raw, signature, self.keys)
+        meta = json.loads(raw)
+        u.require(meta.get('schema') in (1,2) and meta.get('target') == {'device': 'rg353v', 'arch': 'aarch64'}, 'Wrong release target')
+        now = time.time()
+        u.require(now >= 1767225600, 'Set the clock before checking for updates')
+        u.require(type(meta.get('issued')) is int and type(meta.get('expires')) is int
+                  and meta['issued'] <= now + 300 and now < meta['expires']
+                  and 0 < meta['expires'] - meta['issued'] <= 31 * 86400, 'Release metadata is expired/not yet valid')
+        u.require(type(meta.get('sequence')) is int and meta['sequence'] > 0, 'Invalid release sequence')
+        packages=[meta['package']] if meta['schema']==1 else meta.get('packages')
+        u.require(isinstance(packages,list) and len(packages)<=64
+                  and (meta['schema']==2 or len(packages)==1), 'Invalid release package catalog')
+        for p in packages:self.descriptor(p)
+        heads = meta.get('heads', [])
+        u.require(isinstance(heads, list) and len(heads) <= 64, 'Invalid catalog heads')
+        replay = self.root / 'accepted.json'
+        digest = hashlib.sha256(raw).hexdigest()
+        if replay.exists():
+            old = u.load(replay)
+            u.require(meta['sequence'] > old['sequence'] or
+                      (meta['sequence'] == old['sequence'] and digest == old['sha256']), 'Older/conflicting signed release rejected')
+        u.atomic_json(replay, {'sequence': meta['sequence'], 'sha256': digest})
+        if meta['schema']==2:
+            manager=u.Manager('/storage/slot-manager')
+            installed=manager.verify_revision(manager.state()['current'])
+            boot_files={}
+            matching=[p for p in packages if self.applicable(p,installed,boot_files)]
+            known_head = any([self.at_head(h, installed, boot_files) for h in heads])
+            # Publisher order defines dependency order; size breaks ties between
+            # equivalent full/delta artifacts for the same target.
+            p=min((v for v in matching if v['id']==matching[0]['id']),key=lambda v:v['size']) if matching and not known_head else None
+            meta=dict(meta,package=p or {})
+        u.atomic_json(self.root / 'release.json', meta)
+        if not p:
+            self.event('up-to-date' if not packages or known_head else 'no-path')
+            return meta,None
+        self.event('available', version=p['id'], kind=p['kind'], size=p['size'])
+        return meta, urllib.parse.urljoin(url, p['file'])
+
+    def download(self, expected_id=None):
+        meta, url = self.check()
+        u.require(bool(meta.get('package')), 'No compatible update is available for this installation')
+        u.require(expected_id is None or meta['package']['id'] == expected_id,
+                  'Available release changed; check its notes and confirm again')
+        p = meta['package']
+        self.prune_downloads(p['sha256'])
+        target = self.root / (p['sha256'] + '.tar.gz')
+        if target.exists() and target.stat().st_size == p['size'] and u.sha(target) == p['sha256']:
+            self.event('downloaded', version=p['id'], cached=True)
+        else:
+            self.transfer(url, p, target)
+        self.validate_identity(target, p)
+        self.event('downloaded', version=p['id'], path=str(target))
+        return meta, target
+
+    def prune_downloads(self, current_sha):
+        """Only the selected release needs a resumable download-cache slot."""
+        u.require(bool(u.HASH.fullmatch(current_sha)) and not self.root.is_symlink(),
+                  'Invalid update download cache')
+        remove = []
+        for path in self.root.iterdir():
+            match = re.fullmatch(r'([0-9a-f]{64})\.tar\.(gz|partial)', path.name)
+            if match and match[1] != current_sha:
+                u.require(path.is_file() and not path.is_symlink(), 'Invalid cached update file')
+                remove.append(path)
+        for path in remove:
+            path.unlink()
+        if remove:
+            u.syncdir(self.root)
+
+    def transfer(self, url, p, target):
+        temp = target.with_suffix('.partial')
+        present=temp.stat().st_size if temp.is_file() else 0
+        u.require(shutil.disk_usage(self.root).free >= max(0,p['size']-present) + u.RESERVE, 'Insufficient update space')
+        if temp.exists() and temp.stat().st_size > p['size']:
+            temp.unlink()
+        failures, progress = 0, 0
+        while not temp.exists() or temp.stat().st_size < p['size']:
+            offset = temp.stat().st_size if temp.exists() else 0
+            end = min(offset + 8 * 1024**2, p['size']) - 1
+            try:
+                with open_url(url, {'Range': f'bytes={offset}-{end}'}) as source:
+                    status = getattr(source, 'status', 200)
+                    if status == 206:
+                        u.require(source.headers.get('Content-Range') == f'bytes {offset}-{end}/{p["size"]}',
+                                  'Invalid download range response')
+                        expected = end - offset + 1
+                    else:
+                        u.require(status == 200 and offset == 0,
+                                  'Artifact server must support HTTP Range to resume downloads')
+                        expected = p['size']
+                    total = 0
+                    with temp.open('ab') as out:
+                        while total < expected:
+                            block = source.read(min(1024**2, expected - total))
+                            if not block:
+                                raise OSError('Download connection ended before the requested range')
+                            out.write(block)
+                            total += len(block)
+                            if time.monotonic() - progress >= 2:
+                                self.event('downloading', version=p['id'], bytes=offset + total, size=p['size'])
+                                progress = time.monotonic()
+                        out.flush()
+                        os.fsync(out.fileno())
+                    u.require(not source.read(1), 'Download exceeds declared range')
+                failures = 0
+            except (OSError, http.client.IncompleteRead) as error:
+                failures += 1
+                self.event('download-retry', version=p['id'], attempt=failures, reason=str(error))
+                if failures >= 3:
+                    raise u.UpdateError('Download interrupted; run download again to resume the retained partial file') from error
+                time.sleep(1)
+        if temp.stat().st_size != p['size'] or u.sha(temp) != p['sha256']:
+            temp.unlink(missing_ok=True)
+            raise u.UpdateError('Download size/checksum mismatch')
+        temp.replace(target)
+        u.syncdir(self.root)
+
+    @staticmethod
+    def validate_identity(target, p):
+        with tarfile.open(target) as archive:
+            entry = archive.getmember('manifest.json')
+            u.require(entry.isfile() and entry.size <= 1024**2, 'Invalid package manifest')
+            inside = json.load(archive.extractfile(entry))
+        u.require(inside.get('id') == p['id'] and inside.get('kind') == p['kind'], 'Release/package identity mismatch')
+
+    def status(self):
+        path = self.root / 'status.json'
+        result = u.load(path) if path.exists() else {'event': 'idle'}
+        if result['event'] == 'rebooting':
+            manager = module('slot-os-update').OSManager()
+            record_path = manager.root / 'transactions' / result['version'] / 'transaction.json'
+            if record_path.exists():
+                phase = u.load(record_path)['phase']
+                if phase in ('confirmed', 'rolled-back'):
+                    result['event'] = 'installed' if phase == 'confirmed' else 'rolled-back'
+        elif result['event'] == 'trial-started':
+            state = u.Manager('/storage/slot-manager').state()
+            if state['pending'] is None:
+                result['event'] = 'installed' if state['current'] == result['version'] else 'rolled-back'
+        return result
+
+    def apply(self, expected_id=None, staged=None, expected_sha=None, before_install=None):
+        meta, package = self.download(expected_id)
+        p = meta['package']
+        u.require(expected_sha is None or p['sha256'] == expected_sha,
+                  'Available release changed during installation')
+        manager = module('slot-os-update').OSManager() if p['kind'] == 'os' else u.Manager('/storage/slot-manager')
+        if p['kind'] == 'os':
+            manager.prepare(package, p['sha256'], check_only=True)
+        else:
+            archive, _ = manager.check_package(package, p['sha256'])
+            archive.close()
+        shelf_and_power()
+        if before_install is not None:
+            before_install(p)
+        self.event('installing', version=p['id'])
+        subprocess.run(['systemctl', 'stop', 'slot-rg353v.service'], check=True)
+        try:
+            require_shelf()
+            if p['kind'] == 'os':
+                manager.prepare(package, p['sha256'])
+            else:
+                manager.install(package, p['sha256'])
+            if staged is not None:
+                staged(p)
+        except BaseException:
+            subprocess.run(['systemctl', 'start', 'slot-rg353v.service'], check=False)
+            raise
+        if p['kind'] == 'os':
+            self.event('rebooting', version=p['id'])
+            subprocess.run(['systemctl', 'reboot'], check=True)
+        else:
+            subprocess.run(['systemctl', 'start', 'slot-rg353v.service'], check=True)
+            self.event('trial-started', version=p['id'])
+
+
+
+
+class UpdateSession:
+    """One explicit, durable catch-up request; never a general auto-update policy."""
+    def __init__(self, delivery):
+        self.delivery = delivery
+        self.path = delivery.root / 'session.json'
+        self.cancel_path = delivery.root / 'cancel.json'
+
+    def load(self):
+        if not self.path.exists():
+            return None
+        value = u.load(self.path)
+        u.require(value.get('schema') == 1 and isinstance(value.get('id'), str)
+                  and bool(re.fullmatch('[0-9a-f]{32}', value['id']))
+                  and value.get('phase') in ('checking', 'waiting-network', 'applying',
+                      'awaiting-health', 'paused-network', 'paused', 'failed', 'completed', 'cancelled')
+                  and isinstance(value.get('connections'), list)
+                  and set(value['connections']) <= {'wifi', 'usb'}
+                  and isinstance(value.get('completed'), list) and len(value['completed']) <= MAX_STEPS,
+                  'Invalid saved update session; inspect it before continuing')
+        if value.get('step') is not None:
+            self.delivery.descriptor(value['step'])
+        return value
+
+    def save(self, state, phase=None):
+        if phase is not None:
+            state['phase'] = phase
+        state['updated'] = time.time()
+        u.atomic_json(self.path, state)
+
+    @staticmethod
+    def boot_id():
+        return Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+
+    def begin(self, expected):
+        u.require(self.load() is None, 'Finish or cancel the existing update session first')
+        connections = [name for name in ('wifi', 'usb')
+                       if Path('/run/slot-services', name + '.on').is_file()]
+        state = {'schema': 1, 'id': uuid.uuid4().hex, 'phase': 'checking',
+                 'connections': connections, 'network_boot': self.boot_id(),
+                 'expected': expected, 'completed': [], 'step': None, 'created': time.time()}
+        self.cancel_path.unlink(missing_ok=True)
+        self.save(state)
+        return state
+
+    def cancelled(self, state):
+        return read_optional(self.cancel_path, {}).get('id') == state['id']
+
+    def cancel(self):
+        state = self.load()
+        u.require(state is not None, 'No update session is active')
+        # Separate record: a concurrent worker cannot overwrite this request.
+        u.atomic_json(self.cancel_path, {'id': state['id']})
+        if not job_active() and (state.get('step') is None or state['phase'] == 'failed'):
+            self.finish(state, 'cancelled')
+            return False
+        return True
+
+    def finish(self, state, outcome):
+        self.save(state, outcome)
+        u.atomic_json(self.delivery.root / 'last-session.json', state)
+        self.path.unlink()
+        self.cancel_path.unlink(missing_ok=True)
+        u.syncdir(self.delivery.root)
+        self.delivery.event('up-to-date' if outcome == 'completed' else 'cancelled',
+                            steps=len(state['completed']))
+
+    def restore_network(self, state, deadline=None):
+        if state.get('network_boot') == self.boot_id():
+            return
+        def run(command):
+            remaining = 45 if deadline is None else deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('Connection startup timed out')
+            subprocess.run(command, check=True, timeout=min(45, remaining))
+        for connection in state['connections']:
+            if Path('/run/slot-services', connection + '.on').is_file():
+                continue
+            command = (['/usr/bin/slot-services', 'wifi', 'on'] if connection == 'wifi'
+                       else ['systemctl', 'start', 'slot-usb-network.service'])
+            # Only restore the transport explicitly used for this session.
+            # No developer-mode, SSH, file-sharing or NTP opt-in is changed.
+            run(command)
+        # HTTPS needs CA setup even when the only transport is USB Ethernet.
+        run(['systemctl', 'start', 'network-base.service', 'openssl-config.service'])
+        state['network_boot'] = self.boot_id()
+        self.save(state)
+
+    def wait_network(self, state):
+        self.save(state, 'waiting-network')
+        start = time.monotonic()
+        while True:
+            if self.cancelled(state):
+                self.finish(state, 'cancelled')
+                return None
+            elapsed = int(time.monotonic() - start)
+            self.delivery.event('waiting-network', seconds=elapsed, limit=NETWORK_WAIT)
+            try:
+                self.restore_network(state, deadline=start + NETWORK_WAIT)
+                remaining = start + NETWORK_WAIT - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError('Connection startup timed out')
+                return self.delivery.check(timeout=min(5, remaining / 2))
+            except urllib.error.HTTPError as error:
+                if error.code not in (408, 429) and error.code < 500:
+                    raise
+            except (OSError, http.client.HTTPException, subprocess.TimeoutExpired,
+                    subprocess.CalledProcessError):
+                pass
+            # Trust, compatibility, clock and metadata failures are not a
+            # disconnected network: they propagate and stop the session.
+            if time.monotonic() - start >= NETWORK_WAIT:
+                self.save(state, 'paused-network')
+                self.delivery.event('paused-network', reason='Internet is not ready; reconnect and choose Resume updates')
+                return None
+            time.sleep(min(3, NETWORK_WAIT - (time.monotonic() - start)))
+
+    def activation(self, step):
+        manager = u.Manager('/storage/slot-manager')
+        installed = manager.state()
+        if step['kind'] == 'os':
+            os_manager = module('slot-os-update').OSManager()
+            record = os_manager.active()
+            if not record or record['id'] != step['id'] or record['phase'] == 'rolled-back':
+                return 'rolled-back'
+            if record['phase'] == 'confirmed':
+                if (os_manager.boot_id() == step['id'] and installed['pending'] is None
+                        and installed['current'] == record['candidate']):
+                    manager.verify_revision(installed['current'])
+                    return 'confirmed'
+                return 'rolled-back'
+            if record['phase'] in ('prepared', 'staged') and step['boot'] == self.boot_id():
+                return 'reboot-required'
+            return 'pending'
+        if installed['pending'] is not None:
+            return 'pending' if installed['pending']['id'] == step['id'] else 'rolled-back'
+        if installed['current'] != step['id']:
+            return 'rolled-back'
+        manager.verify_revision(installed['current'])
+        return 'confirmed'
+
+    def wait_health(self, state):
+        start = time.monotonic()
+        while True:
+            phase = self.activation(state['step'])
+            if phase == 'reboot-required':
+                self.delivery.event('rebooting', version=state['step']['id'])
+                return False
+            if phase == 'confirmed':
+                state['completed'].append({k: state['step'][k] for k in ('id', 'kind', 'sha256')})
+                state['step'] = None
+                self.save(state, 'checking')
+                return True
+            if phase == 'rolled-back':
+                self.save(state, 'failed')
+                self.delivery.event('rolled-back', reason='Update rolled back; the remaining updates were stopped')
+                return False
+            self.delivery.event('waiting-health', version=state['step']['id'])
+            if time.monotonic() - start >= HEALTH_WAIT:
+                self.save(state, 'paused')
+                self.delivery.event('paused', reason='Startup health check is still pending; inspect before continuing')
+                return False
+            time.sleep(1)
+
+    @staticmethod
+    def handoff():
+        # Continue with the newly verified updater when a Slot/core step changed
+        # its companion tools. Keep the same systemd job/inhibitor and journal.
+        manager = u.Manager('/storage/slot-manager')
+        current = manager.state()['current']
+        manager.verify_revision(current)
+        program = manager.revision(current) / 'System/slot-ota-ui'
+        if program.is_file() and program.resolve() != Path(__file__).resolve():
+            os.execv(sys.executable, [sys.executable, '-B', str(program), '_work', 'resume'])
+
+    def run(self, state):
+        if state['phase'] in ('completed', 'cancelled'):
+            self.finish(state, state['phase'])
+            return
+        if state['phase'] == 'failed':
+            return  # A rollback must never become an automatic retry loop.
+        if state.get('step') is not None:
+            if not self.wait_health(state):
+                return
+            self.handoff()
+        while True:
+            if self.cancelled(state):
+                self.finish(state, 'cancelled')
+                return
+            result = self.wait_network(state)
+            if result is None:
+                return
+            meta, url = result
+            if not url:
+                if self.delivery.status()['event'] == 'up-to-date':
+                    self.finish(state, 'completed')
+                else:
+                    self.save(state, 'paused')
+                return
+            package = meta['package']
+            if state.get('expected'):
+                u.require(package['id'] == state['expected'], 'Available release changed; review the new update first')
+                state['expected'] = ''
+            u.require(len(state['completed']) < MAX_STEPS, 'Update path exceeds the session limit')
+            u.require(not any(s['id'] == package['id'] and s['kind'] == package['kind']
+                              for s in state['completed']), 'Update catalog contains a cycle; stopped')
+            def before_install(descriptor):
+                u.require(not self.cancelled(state), 'Cancellation requested before installation')
+                # Durable before the first service stop or manager mutation.
+                # Downloads/preflight may retry without claiming activation.
+                state['step'] = dict(descriptor, boot=self.boot_id())
+                self.save(state, 'applying')
+            def staged(descriptor):
+                u.require(all(descriptor[k] == state['step'][k] for k in ('id', 'kind', 'sha256')),
+                          'Available release changed during installation')
+                self.save(state, 'awaiting-health')
+            self.delivery.apply(package['id'], staged=staged, expected_sha=package['sha256'],
+                                before_install=before_install)
+            if not self.wait_health(state):
+                return
+            self.handoff()
+
+    def resume(self):
+        state = self.load()
+        if state is not None:
+            try:
+                self.run(state)
+            except Exception as error:
+                if state.get('step') is None and self.cancelled(state):
+                    self.finish(state, 'cancelled')
+                    return
+                # A download/check failure can retry. An interrupted activation
+                # keeps its step so it must reconcile health before doing more.
+                self.save(state, 'paused')
+                self.delivery.event('paused', reason=str(error))
+                raise
+
+
+
+def require_shelf():
+    state = Path('/storage/slotcontent/Config/slot.state').read_text()
+    u.require(not any(line.startswith('cart=') and line != 'cart=' for line in state.splitlines()),
+              'Eject the game before installing or rolling back')
+
+
+def shelf_and_power():
+    require_shelf()
+    batteries = list(Path('/sys/class/power_supply').glob('*/capacity'))
+    u.require(bool(batteries), 'Battery state unavailable')
+    u.require(all((b.parent / 'status').read_text().strip() in ('Charging', 'Full')
+                  or int(b.read_text()) >= 40 for b in batteries), 'Connect a charger before updating')
+
+
+def rollback(kind, expected):
+    shelf_and_power()
+    if kind == 'rollback-os':
+        manager = module('slot-os-update').OSManager()
+        record = manager.active()
+        u.require(record and record['phase'] == 'confirmed' and record['id'] == expected,
+                  'Installed OS changed; open Updates again')
+    else:
+        manager = u.Manager('/storage/slot-manager')
+        u.require(manager.state()['current'] == expected, 'Installed Slot changed; open Updates again')
+    subprocess.run(['systemctl', 'stop', 'slot-rg353v.service'], check=True)
+    try:
+        shelf_and_power()
+        manager.rollback()
+    except BaseException:
+        subprocess.run(['systemctl', 'start', 'slot-rg353v.service'], check=False)
+        raise
+    subprocess.run(['systemctl', 'reboot' if kind == 'rollback-os' else 'start',
+                    *([] if kind == 'rollback-os' else ['slot-rg353v.service'])], check=True)
+
+
+def read_optional(path, default):
+    return u.load(path) if Path(path).exists() else default
+
+
+def job_active():
+    return subprocess.run(['systemctl', 'is-active', '--quiet', 'slot-ota-job.service'], timeout=3).returncode == 0
+
+
+def ui_snapshot(delivery):
+    manager = u.Manager('/storage/slot-manager')
+    state = manager.state()
+    os_manager = module('slot-os-update').OSManager()
+    os_record = os_manager.active()
+    release = read_optional(delivery.root / 'release.json', {})
+    package = release.get('package', {})
+    status = delivery.status()
+    job = read_optional(delivery.root / 'job.json', {})
+    busy = job_active()
+    session = UpdateSession(delivery).load()
+    if (not busy and session and session['phase'] in ('checking', 'waiting-network', 'applying', 'awaiting-health')
+            and status.get('event') != 'rebooting'):
+        status = {'event': 'resume-needed', 'reason': 'Resume the interrupted update session'}
+    if not busy and not session and job.get('state') in ('starting', 'running'):
+        completed = (job.get('operation') == 'apply' and status.get('event') in ('installed', 'rolled-back'))
+        if job.get('operation') == 'rollback-slot' and state['current'] != job.get('expected'):
+            completed = True
+            status = {'event': 'rolled-back'}
+        if job.get('operation') == 'rollback-os' and os_record and os_record['id'] != job.get('expected') and os_record['phase'] == 'confirmed':
+            completed = True
+            status = {'event': 'rolled-back'}
+        if not completed:
+            status = {'event': 'failed', 'reason': 'Update job interrupted; retry or check installed version'}
+    previous = state.get('previous')
+    if previous:
+        previous_meta = read_optional(manager.revision(previous) / 'revision.json', {})
+        if previous_meta.get('runtime') != manager.env():
+            previous = None
+    installed_os = os_record['id'] if os_record and os_record['phase'] == 'confirmed' else 'Factory'
+    installed = package.get('id') in (state['current'], installed_os)
+    cached = delivery.root / (package.get('sha256', '') + '.tar.gz')
+    downloaded = cached.is_file() and cached.stat().st_size == package.get('size')
+    config = delivery.configuration()
+    source = urllib.parse.urlsplit(config.get('url', '')).hostname or 'Not configured'
+    values = {'slot': state['current'], 'os': installed_os, 'source': source,
+              'available': package.get('id', ''), 'kind': package.get('kind', ''),
+              'notes': release.get('notes', ''), 'downloaded': downloaded,
+              'installed': installed, 'retained': bool(package.get('id') and (manager.revisions / package['id']).is_dir()), 'rollback_slot': previous or '',
+              'rollback_os': os_record['id'] if os_record and os_record['phase'] == 'confirmed' else '',
+              'event': status.get('event', 'idle'), 'reason': status.get('reason', ''),
+              'bytes': status.get('bytes', 0), 'size': package.get('size', 0),
+              'busy': busy, 'operation': job.get('operation', ''),
+              'session': bool(session), 'session_phase': session['phase'] if session else '',
+              'steps': len(session['completed']) if session else 0,
+              'seconds': status.get('seconds', 0),
+              'cancel_requested': bool(session and UpdateSession(delivery).cancelled(session))}
+    # A deliberately small, versioned protocol avoids adding JSON parsing to Slot.
+    print('protocol\t1')
+    for name, value in values.items():
+        text = str(int(value)) if isinstance(value, bool) else str(value)
+        text = ''.join(c if c.isprintable() and c not in '\t\r\n' else ' ' for c in text)[:1024]
+        print(name + '\t' + text)
+
+
+def request_job(delivery, operation, expected):
+    u.require(operation in ('check', 'download', 'apply', 'resume', 'cancel', 'rollback-slot', 'rollback-os'), 'Unsupported update operation')
+    u.require(operation in ('check', 'resume', 'cancel') or isinstance(expected, str) and bool(u.SAFE_ID.fullmatch(expected)),
+              'Select a release before continuing')
+    # Serialize launchers without waiting behind the long-running delivery lock.
+    with u.Manager(delivery.root / 'requests').locked():
+        session = UpdateSession(delivery)
+        if operation == 'cancel':
+            if not session.cancel() or job_active():
+                return
+            operation = 'resume'
+        if operation == 'resume':
+            if session.load() is None or job_active():
+                return
+        else:
+            u.require(session.load() is None, 'Finish or cancel the current update session first')
+        u.require(not job_active(), 'Another update job is running')
+        job = {'state': 'starting', 'operation': operation, 'expected': expected, 'time': time.time()}
+        u.atomic_json(delivery.root / 'job.json', job)
+        program = Path(__file__).resolve()
+        try:
+            inhibit = (['systemd-inhibit', '--what=handle-power-key:sleep', '--mode=block',
+                        '--who=SlotUpdater', '--why=Software update']
+                       if operation in ('apply', 'resume', 'rollback-slot', 'rollback-os') else [])
+            subprocess.run(['systemd-run', '--quiet', '--collect', '--unit=slot-ota-job',
+                            '--property=Type=exec', '--property=TimeoutStopSec=5',
+                            *inhibit, sys.executable, '-B', str(program), '_work', operation,
+                            '--expected', expected or ''], check=True, timeout=10)
+        except BaseException:
+            job['state'] = 'failed'
+            u.atomic_json(delivery.root / 'job.json', job)
+            raise
+
+
+def work_job(delivery, operation, expected):
+    job = {'state': 'running', 'operation': operation, 'expected': expected, 'time': time.time()}
+    u.atomic_json(delivery.root / 'job.json', job)
+    try:
+        with delivery.locked():
+            if operation in ('rollback-slot', 'rollback-os'):
+                rollback(operation, expected)
+                delivery.event('rolled-back', version=expected)
+            elif operation == 'check':
+                delivery.check()
+            elif operation in ('apply', 'resume'):
+                session = UpdateSession(delivery)
+                if operation == 'apply':
+                    shelf_and_power()
+                    session.begin(expected)
+                session.resume()
+            else:
+                getattr(delivery, operation)(expected)
+        job['state'] = 'done'
+    except Exception as error:
+        job['state'] = 'failed'
+        delivery.event('failed', reason=str(error))
+        raise
+    finally:
+        u.atomic_json(delivery.root / 'job.json', job)
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='command', required=True)
+    p = sub.add_parser('configure')
+    p.add_argument('url')
+    p.add_argument('--development-http', action='store_true')
+    for name in ('ui',):
+        sub.add_parser(name)
+    for name in ('request', '_work'):
+        p = sub.add_parser(name)
+        p.add_argument('operation', choices=['check', 'download', 'apply', 'resume', 'cancel', 'rollback-slot', 'rollback-os'])
+        p.add_argument('--expected')
+    for name in ('check', 'download', 'apply', 'status'):
+        sub.add_parser(name)
+    args = parser.parse_args()
+    u.runtime()
+    delivery = Delivery()
+    if args.command == 'ui':
+        ui_snapshot(delivery)
+        return
+    if args.command == 'request':
+        request_job(delivery, args.operation, args.expected)
+        return
+    if args.command == '_work':
+        work_job(delivery, args.operation, args.expected)
+        return
+    with delivery.locked():
+        if args.command == 'configure':
+            checked_url(args.url, args.development_http)
+            u.atomic_json(CONFIG, {'url': args.url, 'development_http': args.development_http})
+        elif args.command == 'status':
+            print(json.dumps(delivery.status()))
+        else:
+            try:
+                if args.command == 'apply':
+                    shelf_and_power()
+                    UpdateSession(delivery).begin(None)
+                    UpdateSession(delivery).resume()
+                else:
+                    getattr(delivery, args.command)()
+            except Exception as error:
+                delivery.event('failed', reason=str(error))
+                raise
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except (u.UpdateError, OSError, ValueError, KeyError, TypeError, tarfile.TarError, subprocess.SubprocessError) as error:
+        print('Slot OTA stopped: ' + str(error), file=sys.stderr)
+        sys.exit(1)

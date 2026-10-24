@@ -1,0 +1,29 @@
+#!/bin/sh
+# The factory path needs neither Python nor hardware-database compilation.
+factory=/usr/share/slot/hardware/hwdb.d
+custom=/etc/udev/hwdb.d
+empty=1
+for file in "$custom"/*.hwdb; do
+  [ -e "$file" ] || [ -L "$file" ] || continue
+  empty=0
+done
+if [ "$empty" = 1 ] && [ -s /usr/lib/udev/hwdb.bin ]; then
+  rm -f /run/hwdb.bin
+  echo 'Using prebuilt RG353V hardware database'
+  exit 0
+fi
+unchanged=1
+for file in "$factory"/*.hwdb; do
+  [ -f "$file" ] || continue
+  cmp -s "$file" "$custom/${file##*/}" || unchanged=0
+done
+for file in "$custom"/*.hwdb; do
+  [ -e "$file" ] || [ -L "$file" ] || continue
+  [ -f "$factory/${file##*/}" ] || unchanged=0
+done
+if [ "$unchanged" = 1 ] && [ -s /usr/lib/udev/hwdb.bin ]; then
+  rm -f /run/hwdb.bin
+  echo 'Using prebuilt RG353V hardware database'
+  exit 0
+fi
+exec /usr/bin/python3 /usr/lib/slot/hwdb-cache

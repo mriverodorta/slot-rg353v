@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""Manual SD games filesystem maintenance. Never touch eMMC or system partitions."""
+import contextlib
+import json
+import fcntl
+import hashlib
+import os
+from pathlib import Path
+import re
+import select
+import signal
+import stat
+import subprocess
+import sys
+import time
+
+CONTENT = '/storage/slotcontent'
+BASE = Path('/run/slot-sd-library')
+ALLOWED = {CONTENT, str(BASE/'TF1'), str(BASE/'TF2')}
+CONTROLLERS = {'fe2b0000.mmc': 'TF1', 'fe2c0000.mmc': 'TF2'}
+class Refused(Exception): pass
+
+def require(condition, message):
+    if not condition: raise Refused(message)
+
+def run(args, timeout=15):
+    """Fixed argv, bounded output and deadline; no shell and no child leakage."""
+    p = subprocess.Popen([str(a) for a in args], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, cwd='/', start_new_session=True)
+    result=bytearray(); end=time.monotonic()+timeout
+    try:
+        while len(result)<65536 and time.monotonic()<end:
+            ready,_,_=select.select([p.stdout],[],[],max(0,end-time.monotonic()))
+            if not ready: break
+            block=os.read(p.stdout.fileno(),min(4096,65536-len(result)))
+            if not block:
+                return p.wait(timeout=max(.01,end-time.monotonic())),result.decode('utf8','replace')
+            result.extend(block)
+        raise Refused('Storage tool timed out or returned too much output')
+    finally:
+        if p.poll() is None: os.killpg(p.pid,signal.SIGKILL)
+        p.wait();p.stdout.close()
+
+def checked(args):
+    code,text=run(args)
+    require(code==0, f'{Path(str(args[0])).name} failed: {text[-180:]}')
+    return text.strip()
+
+def mounts():
+    def decode(s): return re.sub(r'\\([0-7]{3})', lambda m:chr(int(m[1],8)),s)
+    return [tuple(decode(c) for c in line.split()[:4]) for line in Path('/proc/mounts').read_text().splitlines()]
+
+def identity(device):
+    real=Path(device).resolve(strict=True)
+    require(re.fullmatch(r'mmcblk\d+(p\d+)?',real.name), 'Only removable SD media is supported')
+    info=real.stat(); require(stat.S_ISBLK(info.st_mode),'Not a block device')
+    disk=re.sub(r'p\d+$','',real.name);node=Path('/sys/class/block')/disk
+    require((node/'device/type').read_text().strip()=='SD','Internal eMMC is protected')
+    slot=next((name for key,name in CONTROLLERS.items() if key in node.resolve().parts),None)
+    require(slot is not None,'Unknown SD controller')
+    cid=(node/'device/cid').read_text().strip()
+    require(re.fullmatch('[0-9a-fA-F]{32}',cid),'Cannot verify card identity')
+    uuid=checked(['blkid','-p','-s','UUID','-o','value',real])
+    require(uuid and len(uuid)<128,'Cannot verify filesystem identity')
+    return str(real),info.st_rdev,cid,uuid,slot
+
+def exported(device):
+    for file in Path('/sys/kernel/config/usb_gadget').glob('*/functions/mass_storage.*/lun.*/file'):
+        value=file.read_text().strip()
+        if value and os.path.realpath(value)==device: return True
+    return False
+
+def target(row,current):
+    device,path,kind,options=row
+    require(path in ALLOWED and kind in ('exfat','vfat'),'Not an eligible games partition')
+    ident=identity(device);device=ident[0]
+    require(not any(os.path.realpath(src)==device and where in ('/','/flash','/storage') for src,where,_,_ in current),'System partition is protected')
+    require(sum(os.path.realpath(src)==device for src,_,_,_ in current)==1,'Partition has multiple mounts')
+    require(not exported(device),'Partition is exported over USB')
+    require((Path(path)/'Games').is_dir(),'Games folder missing')
+    token=hashlib.sha256(repr((ident,path,kind,options)).encode()).hexdigest()
+    return {'token':token,'label':f'{ident[4]} games ({Path(device).name})','device':device,'path':path,'kind':kind,'options':options,'identity':ident}
+
+def discover():
+    current=mounts();result=[]
+    for row in current:
+        if row[1] not in ALLOWED: continue
+        try: result.append(target(row,current))
+        except (Refused,OSError,subprocess.SubprocessError): pass
+    return result[:3]
+
+def repair_power_ready(root=Path('/sys/class/power_supply')):
+    batteries=list(root.glob('*'))
+    for supply in batteries:
+        try:
+            if (supply/'type').read_text().strip()!='Battery': continue
+            status=(supply/'status').read_text().strip()
+            capacity=int((supply/'capacity').read_text().strip())
+            return status in ('Charging','Full') or capacity>=20
+        except (OSError,ValueError): continue
+    # Unknown telemetry must not authorize writes to storage.
+    return False
+
+def fsck(t,repair):
+    tool='fsck.exfat' if t['kind']=='exfat' else 'fsck.fat'
+    if not repair:
+        code,output=run([tool,'-n',t['device']],timeout=60)
+        return code==0,output
+    outputs=[];deadline=time.monotonic()+180
+    # FAT can need another pass after an initial structural repair. Bound both
+    # passes and total runtime; only a clean independent read-only check wins.
+    for attempt in range(3):
+        require(repair_power_ready(),'Charge to 20% or connect a working charger before repair')
+        require(not any(os.path.realpath(src)==t['device'] for src,_,_,_ in mounts()),'Partition became mounted')
+        require(identity(t['device'])==t['identity'],'Card changed during repair')
+        require(not exported(t['device']),'Partition was exported over USB')
+        remaining=deadline-time.monotonic();require(remaining>0,'Storage repair time limit reached')
+        code,text=run([tool,'-p' if t['kind']=='exfat' else '-a',t['device']],timeout=min(30,remaining))
+        outputs.append(text[-8192:])
+        if code not in (0,1):return False,'\n'.join(outputs)
+        remaining=deadline-time.monotonic();require(remaining>0,'Storage repair time limit reached')
+        verify,text=run([tool,'-n',t['device']],timeout=min(30,remaining))
+        outputs.append(text[-8192:])
+        if verify==0:return True,'\n'.join(outputs)
+        if verify!=1:return False,'\n'.join(outputs)
+    return False,'\n'.join(outputs)
+
+def maintain(token,repair):
+    require(os.geteuid()==0,'Administrator access required')
+    require(re.fullmatch('[0-9a-f]{64}',token),'Invalid card selection')
+    require(not Path('/run/slot-usb/active').exists(),'USB storage is active')
+    for path in ['/storage/slot-manager/state.json', '/storage/slot-os-updates/state.json']:
+        pointer=Path(path)
+        if not pointer.exists(): continue
+        state=json.loads(pointer.read_text())
+        require(state.get('pending') is None,'Finish the pending update first')
+        transaction=state.get('transaction')
+        if transaction:
+            require(isinstance(transaction,str) and re.fullmatch('[A-Za-z0-9_.-]+',transaction) and transaction not in ('.','..'),'Invalid update state')
+            record=json.loads((pointer.parent/'transactions'/transaction/'transaction.json').read_text())
+            require(record.get('phase')=='confirmed','Finish the pending OS update first')
+    t=next((t for t in discover() if t['token']==token),None)
+    require(t is not None,'Card changed or unavailable; refresh the list')
+    state=Path(CONTENT)/'Config/slot.state'
+    if state.exists():
+        require(not any(line.startswith('cart=') and line!='cart=' for line in state.read_text().splitlines()),'Eject the game with F first')
+    if repair: require(repair_power_ready(),'Charge to 20% or connect a working charger before repair')
+    was_smb=run(['systemctl','is-active','--quiet','slot-sharing.service'])[0]==0
+    unmounted=False;clean=False;failure=None;result=''
+    try:
+        if was_smb: checked(['systemctl','stop','slot-sharing.service'])
+        require(any(x['token']==token for x in discover()),'Card changed before unmount')
+        os.sync()
+        try:
+            checked(['umount',t['path']]) # Never force/lazy unmount or kill a holder.
+        finally:
+            unmounted=not any(where==t['path'] for _,where,_,_ in mounts())
+        require(not any(os.path.realpath(src)==t['device'] for src,_,_,_ in mounts()),'Partition is still mounted')
+        require(identity(t['device'])==t['identity'],'Card changed before check')
+        require(not exported(t['device']),'Partition was exported over USB')
+        clean,output=fsck(t,repair)
+        result=('Repair completed; verification passed' if repair else 'Check passed; filesystem is clean') if clean else 'Filesystem errors remain. Back up files before trying repair.'
+    except Exception as error: failure=error
+    finally:
+        if unmounted:
+            try:
+                require(identity(t['device'])==t['identity'],'Card changed; not remounting')
+                # On errors, restore read-only, even if originally writable.
+                options=t['options'] if clean else ','.join([o for o in t['options'].split(',') if o not in ('rw','ro')]+['ro'])
+                checked(['mount','-t',t['kind'],'-o',options,t['device'],t['path']])
+            except Exception as error: failure=Refused(f'Storage could not be restored: {error}. Restart after backing up the card.')
+        if was_smb and (not unmounted or clean) and failure is None:
+            try: checked(['systemctl','start','slot-sharing.service'])
+            except Exception as error: failure=Refused(f'Storage restored; File Sharing needs restarting: {error}')
+        elif was_smb and not unmounted:
+            try: checked(['systemctl','start','slot-sharing.service'])
+            except Exception: pass
+    if failure: raise failure
+    return result + ('' if clean else ' Storage is read-only for safety.')
+
+def main():
+    args=sys.argv[1:]
+    require(args==['status'] or (len(args)==2 and args[0] in ('check','repair')), 'Invalid command')
+    print('protocol\t1')
+    if args==['status']:
+        targets=discover();print(f'count\t{len(targets)}')
+        for i,t in enumerate(targets): print(f"token_{i}\t{t['token']}\nlabel_{i}\t{t['label']}")
+        return
+    # Cooperate with library discovery and serialize concurrent maintenance.
+    BASE.mkdir(exist_ok=True,parents=True)
+    with contextlib.ExitStack() as stack:
+        for path in [BASE/'lock', Path('/storage/.cache/slot-usb/lock'), Path('/storage/slot-os-updates/control/lock'), Path('/storage/slot-manager/lock'), Path('/storage/.cache/slot-sharing.lock')]:
+            path.parent.mkdir(parents=True,exist_ok=True)
+            lock=stack.enter_context(path.open('a'))
+            fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        message=maintain(args[1],args[0]=='repair')
+    print('message\t'+message)
+
+if __name__=='__main__':
+    try: main()
+    except Exception as error:
+        print('protocol\t1\nmessage\t'+re.sub(r'[\r\n\t]+',' ',str(error))[:360]);sys.exit(1)

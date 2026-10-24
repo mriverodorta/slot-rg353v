@@ -1,0 +1,14 @@
+[Unit]
+Description=Slot read-only removable game libraries
+After=storage-slotcontent.service
+Wants=storage-slotcontent.service
+Before=slot-rg353v.service
+ConditionPathExists=/usr/bin/slot-sd-library
+ConditionPathExistsGlob=|/sys/devices/platform/fe2b0000.mmc/mmc_host/mmc*/*/block/mmcblk[0-9]*
+ConditionPathExistsGlob=|/sys/devices/platform/fe2c0000.mmc/mmc_host/mmc*/*/block/mmcblk[0-9]*
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/slot-sd-library-boot
+RemainAfterExit=yes
+TimeoutStartSec=30

@@ -1,0 +1,3 @@
+# Patches are applied byte for byte to pinned upstream source.
+ports/rg353v/layer/patches/*.patch -text
+ports/rg353v/layer/files/cores/**/*.patch -text

@@ -1,0 +1,12 @@
+[Unit]
+Description=Prepare the fixed RG353V Mali GPU while system settings initialize
+DefaultDependencies=no
+After=systemd-modules-load.service
+Before=rocknix-autostart.service shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/modprobe mali_kbase
+RemainAfterExit=yes
+TimeoutStartSec=15

@@ -1,0 +1,31 @@
+#!/bin/bash
+set -a
+/usr/bin/slot-boot-boost release || :
+systemctl start --no-block slot-usb-hosts.service
+# Audit the retained source archive after the first shelf, at idle priority.
+# The timer's service checks that a real frontend frame has been displayed.
+systemctl start --no-block slot-revision-audit.timer
+mkdir -p /storage/.config/profile.d
+for profile in /usr/share/slot/hardware/profile.d/*; do
+  target=/storage/.config/profile.d/${profile##*/}
+  if ! cmp -s "$profile" "$target"; then
+    cp "$profile" "$target"
+  fi
+done
+. /etc/profile
+log=/var/log/slot-background.log
+exec >>"$log" 2>&1
+printf 'Deferred services started at '; cut -d' ' -f1 /proc/uptime
+touch /run/slot-background.ready
+/usr/bin/slot-module-cleanup || :
+# Local clock presentation and boot records do not require network access.
+systemctl start --no-block systemd-update-utmp-runlevel.service tz-data.service
+systemctl start --no-block rocknix-memory-manager.service
+# An absent/disabled policy starts no networking, remote login or NTP tools.
+# Session grants live only in /run and therefore cannot survive a reboot.
+if [ -f /storage/.config/slot/developer-mode ] &&
+   [ "$(cat /storage/.config/slot/developer-mode)" = 1 ]; then
+  /usr/bin/slot-services developer on || exit 1
+  systemctl start --no-block slot-revision-audit.timer
+fi
+printf 'Game startup ready at '; cut -d' ' -f1 /proc/uptime

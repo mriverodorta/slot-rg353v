@@ -1,0 +1,20 @@
+{
+  "left": "\uf0d9",
+  "right": "\uf0da",
+  "volume": "\uf028",
+  "volume-zero": "\uf026",
+  "volume-muted": "\udb81\udf5f",
+  "brightness": "\uf185",
+  "blue-light": "\uf186",
+  "fast-forward": "\udb81\uded2",
+  "fast-forward-latched": "\udb80\ude11",
+  "rewind": "\uf04a",
+  "alert": "\udb80\udc26",
+  "charging": "\uf0e7",
+  "headphones": "\uf025",
+  "headphones-muted": "\udb81\udfce",
+  "link": "\udb80\udf39",
+  "link-broken": "\udb80\udf3a",
+  "up": "\uf0d8",
+  "down": "\uf0d7"
+}

@@ -1,0 +1,39 @@
+#!/bin/sh
+set -eu
+exec > /storage/slot-content-mount.log 2>&1
+date
+cat /proc/partitions
+if [ -e /run/slot-usb/active ]; then
+  [ -e /run/slot-usb/restoring ] || { echo "Content belongs to USB host"; exit 1; }
+  g=/sys/kernel/config/usb_gadget/slot-storage
+  [ ! -e "$g/UDC" ] || [ -z "$(cat "$g/UDC")" ]
+  [ ! -e "$g/functions/mass_storage.0/lun.0/file" ] || [ -z "$(cat "$g/functions/mass_storage.0/lun.0/file")" ]
+fi
+root=/storage/slotcontent
+mkdir -p "$root"
+if mountpoint -q "$root"; then exit 0; fi
+# SD and eMMC may carry identical labels; keep all mounts on the boot disk.
+if [ -x /usr/bin/slot-content-probe ]; then
+  content="$(/usr/bin/slot-content-probe)"
+else
+  # Baseline images without the startup package retain their validated path.
+  boot="$(readlink -f "$(awk '$2 == "/flash" { print $1 }' /proc/mounts)")"
+  storage="$(readlink -f "$(awk '$2 == "/storage" { print $1 }' /proc/mounts)")"
+  content="$(/usr/bin/slot-content-device "$boot" "$storage")"
+  [ "$(blkid -p -s LABEL -o value "$content")" = SLOT ]
+  [ "$(blkid -p -s TYPE -o value "$content")" = exfat ]
+fi
+[ -n "$content" ] && [ -b "$content" ]
+# A reboot clears ConfigFS, but an interrupted USB session needs an integrity check.
+if [ -e /storage/.cache/slot-usb/owner.json ]; then
+  g=/sys/kernel/config/usb_gadget/slot-storage
+  [ ! -e "$g/UDC" ] || [ -z "$(cat "$g/UDC")" ]
+  [ ! -e "$g/functions/mass_storage.0/lun.0/file" ] || [ -z "$(cat "$g/functions/mass_storage.0/lun.0/file")" ]
+  fsck.exfat -n "$content"
+fi
+mount -t exfat -o noatime,fmask=0022,dmask=0022 "$content" "$root"
+rm -f /storage/.cache/slot-usb/owner.json
+mkdir -p "$root/Diagnostics"
+{ date; echo "Mounted $content at $root"; findmnt --kernel --target "$root" || true; } > "$root/Diagnostics/content-mount.log"
+
+exit 0

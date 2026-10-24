@@ -1,0 +1,22 @@
+[Unit]
+Description=Experimental slot frontend for RG353V
+Wants=slot-sd-library.service slot-os-guard.service slot-boot-progress.service
+After=slot-sd-library.service slot-os-guard.service storage-slotcontent.service rocknix-autostart.service rocknix-automount.service input.service
+Requires=storage-slotcontent.service
+Conflicts=emustation.service essway.service sway.service input.service
+
+[Service]
+Environment=HOME=/storage
+Environment=SLOT_ROOT=/storage/slotcontent
+Environment=SLOT_BOOT_SPLASH=1
+Environment=SLOT_RG353V_SLEEP=deep
+Environment=SDL_KMSDRM_DEVICE_INDEX=0
+Environment=SLOT_ALSA_DEVICE=plughw:CARD=rk817int,DEV=0
+Environment=SLOT_ALSA_READY=/run/slot-speaker.ready
+ExecStart=/usr/bin/systemd-inhibit --what=handle-power-key --mode=block --who=Slot --why="Slot handles the power button" /usr/bin/slot-start
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=5
+
+[Install]
+WantedBy=rocknix.target

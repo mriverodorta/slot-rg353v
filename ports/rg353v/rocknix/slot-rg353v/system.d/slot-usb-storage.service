@@ -1,0 +1,15 @@
+[Unit]
+Description=Slot exclusive USB content storage
+After=slot-background.service storage-slotcontent.service
+Requires=storage.mount
+Before=umount.target
+
+[Service]
+Type=simple
+Environment=HOME=/storage
+Environment=SLOT_SILENT=1
+ExecStart=/usr/bin/systemd-inhibit --what=sleep:shutdown:handle-power-key --mode=block --who=Slot --why="Eject USB storage before sleeping or powering off" /usr/bin/slot-usb-storage run
+TimeoutStopSec=20
+SendSIGKILL=no
+StandardOutput=journal
+StandardError=journal

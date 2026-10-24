@@ -1,0 +1,24 @@
+#!/bin/sh
+# Keep three bounded boot snapshots, including boots where SSH never connects.
+if [ "${1:-}" != --capture-now ]; then
+  nohup /bin/sh "$0" --capture-now >/dev/null 2>&1 &
+  exit 0
+fi
+sleep 45
+set -eu
+logs=/storage/slot-diagnostics
+mkdir -p "$logs"
+[ ! -f "$logs/wifi-previous.log" ] || mv "$logs/wifi-previous.log" "$logs/wifi-older.log"
+[ ! -f "$logs/wifi-current.log" ] || mv "$logs/wifi-current.log" "$logs/wifi-previous.log"
+{
+  date
+  printf 'Boot ID: '; cat /proc/sys/kernel/random/boot_id
+  printf '\nWi-Fi device status\n'
+  nmcli -t -f DEVICE,TYPE,STATE device status || true
+  nmcli -g GENERAL.DEVICE,GENERAL.STATE,GENERAL.CONNECTION,IP4.ADDRESS device show || true
+  printf '\nKernel log\n'
+  journalctl -b -k -n 1500 --no-pager || true
+  printf '\nWi-Fi services\n'
+  journalctl -b -u NetworkManager -u iwd -u slot-wpa-supplicant -n 1500 --no-pager || true
+} > "$logs/wifi-current.log.tmp"
+mv "$logs/wifi-current.log.tmp" "$logs/wifi-current.log"
