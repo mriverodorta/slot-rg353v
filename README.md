@@ -10,7 +10,7 @@ The [illustrated user guide](wiki/Home.md) covers every setup page, optional mod
 
 ## Install
 
-1. Download this project's compressed `.img.gz` from [GitHub Releases](https://github.com/mriverodorta/slot-rg353v/releases). Use the **public release**, not an image marked `PRIVATE`.
+1. Download this project's compressed `.img.gz` from [GitHub Releases](https://github.com/mriverodorta/slot-rg353v/releases/latest). Use the **public release**, not an image marked `PRIVATE`.
 2. Flash it to a spare microSD with [balenaEtcher](https://etcher.balena.io/). Select the compressed image directly. Flashing erases the selected card.
 3. Insert the card in **TF1**. If our eMMC loader is already installed, hold **F** while powering on to boot TF1.
 4. Choose **Set up this SD card** or **Install to internal eMMC**, then choose Minimal, Recommended, Full or Custom. Full automatically includes every feature available in the image. Review the destination and features before confirming. Internal installation replaces the eMMC system, including Android.
@@ -19,6 +19,8 @@ The [illustrated user guide](wiki/Home.md) covers every setup page, optional mod
 7. Check the clock; Miami/Eastern time is the initial choice. Add your own uncompressed `.gb`, `.gbc` and `.gba` games to `Games/GB`, `Games/GBC` and `Games/GBA` on SLOT.
 
 See [installation and recovery](wiki/Installation.md) before replacing an existing installation. Images contain no commercial games, BIOS files or personal saves. Back up your content before flashing or reinstalling.
+
+The image release contains only the flashable image and its checksum. Optional [source materials](SOURCES.md) are organized in a separate release; they are not needed for installation.
 
 ## Features
 

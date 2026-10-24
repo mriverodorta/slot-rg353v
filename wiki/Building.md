@@ -56,9 +56,13 @@ The 23 October 2026 clean-clone qualification completed the public source-build 
 
 ## Release source materials
 
-Binary releases provide a separate corresponding-source bundle, alongside the flash image and checksums. It contains the device-layer project, the matching prepared Slot source, patched mGBA source and gpSP source/patches, Cargo dependency sources, modified ROCKNIX recipes and resolved kernel/U-Boot configurations, and the cached open-source OS package inputs. A manifest records input URLs and SHA-256 hashes. NSPR is supplied inside the NSS archive; inline and virtual packages are covered by the ROCKNIX recipes. Generic and Specific U-Boot sources are included explicitly.
+The normal image release contains the flashable `.img.gz` and its checksum. Corresponding sources are linked in a separate [Sources release](https://github.com/mriverodorta/slot-rg353v/releases/tag/v0.1.0-sources), with a [download index](https://github.com/mriverodorta/slot-rg353v/blob/main/SOURCES.md). You do not need source archives to install Slot, and a normal Git clone/build can still fetch the pinned inputs through the documented workflow.
 
-The source bundle also retains third-party notices, the Mali wrapper source, and the original Arm, Realtek and Rockchip binary-firmware terms. Proprietary driver/firmware source that upstream does not provide cannot be supplied as open source; the exact public binary input hashes and URLs are recorded instead. Their terms remain separate from Slot's GPL. Downloading the source materials is unnecessary when simply flashing the image.
+The source files are grouped by component: prepared Slot/cores and locked Rust dependencies; ROCKNIX recipes/configuration/notices; Linux; GCC runtime sources; U-Boot; system, network/security, utilities, graphics/audio and supporting build libraries; and static installer sources. The tagged repository supplies our device layer/build scripts directly, so another project checkout is not duplicated in the downloads. Linux and GCC keep their original XZ bytes; grouped archives preserve their inner source archive bytes. Identical SDL/U-Boot inputs are included once with recorded aliases. NSPR is inside NSS.
+
+Selection uses the exact released Full image, all optional modules, the bound initramfs and the starter installer. Absent standalone programs and unrelated graphics stacks are excluded. Small library inputs are retained conservatively because no standalone file does not prove that statically linked code or required headers are absent. The source manifest and the build-and-notices archive record this mapping, input URLs/hashes and source provenance. The grouped archives contain inner `.tar` files; extract those after the outer `.tar.xz`. A fully offline OS/toolchain build is not claimed.
+
+Original package notices and Arm/Realtek/Rockchip binary-firmware terms remain available. Proprietary binary-only inputs retain exact upstream URL/hash bindings, rather than being described as open source. Repacking source downloads does not change any executable or the qualified flash-image checksum.
 
 ## Locks, caching and reproducibility
 
