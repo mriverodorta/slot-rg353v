@@ -7,7 +7,7 @@ ROOT=Path(__file__).resolve().parents[1]
 WIKI=ROOT/'wiki'
 catalog=json.loads((ROOT/'ports/rg353v/modules/catalog-v1.json').read_text())
 lines=['# Screens and videos','',
-       'All images are native 640×480 renders of the installer or frontend. Games and cartridge artwork come from the owner’s collection; capacities, network addresses and service readings are illustrative. No ROMs or saves are bundled. See [media provenance](Media-Production.md).','',
+       'All images are native 640×480 renders of the installer or frontend. Game and cartridge-art illustrations are included as examples; capacities, network addresses and service readings are illustrative. No ROMs or saves are bundled. See [media provenance](Media-Production.md).','',
        '## Animations','',
        '![Setup walkthrough](media/setup-walkthrough.gif)','',
        'Setup interface demonstration with condensed installation progress.','',

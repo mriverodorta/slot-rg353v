@@ -4,7 +4,7 @@
   "boot_type": "controlled software restarts, not physical button/rumble measurements",
   "conditions": {
     "system": "TF1 SD",
-    "library": "TF2, 81 games",
+    "library": "Removable game library on TF2",
     "save_location": "Game",
     "developer_mode": "On",
     "usb_networking": "Off",

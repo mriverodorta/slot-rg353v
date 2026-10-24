@@ -5,7 +5,7 @@
     "clock": "Linux entry to first scene swap; no button/rumble/optical-panel timing",
     "boot": "controlled software restart with F released",
     "system": "TF1",
-    "library": "TF2, 81 games",
+    "library": "Removable game library on TF2",
     "usb_networking": "Off, including developer autostart",
     "developer_mode": "On",
     "save_location": "Game",

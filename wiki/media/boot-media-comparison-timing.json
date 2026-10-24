@@ -12,7 +12,7 @@
   "shared_conditions": {
     "installed_modules": 23,
     "kernel_os_frontend_and_both_cores": "Identical verified payloads",
-    "library": "81 games and 85 save/state files on TF2",
+    "library": "Removable game library on TF2",
     "save_location": "Game",
     "developer_mode": "On",
     "usb_networking": "Off",
@@ -30,8 +30,8 @@
       4.284117042
     ],
     "mean_s": 4.295217251,
-    "separate_owner_boot_linux_to_shelf_s": 4.257015751,
-    "separate_owner_boot_included_in_mean": false
+    "separate_manual_boot_linux_to_shelf_s": 4.257015751,
+    "separate_manual_boot_included_in_mean": false
   },
   "sd": {
     "system_medium": "TF1 microSD",

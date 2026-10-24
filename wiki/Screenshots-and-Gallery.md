@@ -34,4 +34,4 @@ Button legends appear when you press controls, fade after two seconds without in
 
 ![Confirm screenshot deletion](images/features/gallery-delete.png)
 
-The guide shows Zelda, Metroid Fusion and Golden Sun from the owner's collection. These are screenshots, not included games or save files. Gallery works with your own PNG screenshots. Installing Gallery alone does not add the screenshot shortcut; installing Screenshots alone still lets you copy/view images on a computer.
+The guide illustrates Zelda, Metroid Fusion and Golden Sun. These are screenshots, not included games or save files. Gallery works with your own PNG screenshots. Installing Gallery alone does not add the screenshot shortcut; installing Screenshots alone still lets you copy/view images on a computer.

@@ -8,7 +8,7 @@ SPL passes its records to full U-Boot using a 16 KiB buffer at `0x01800000`, abo
 
 Run `python3 read-bootstage.py` on the handheld to read the current boot. The experimental report path/service saves reports after `/run/slot-boot/frontend.displayed` appears to `/storage/slotcontent/Diagnostics/Bootloader/`, retaining ten. This is an after-startup measurement export, not a boot dependency. Files are also available through the Slot share under `Diagnostics/Bootloader`. No credentials are included in these reports.
 
-The spare installation retains both a previous-loader backup and the profiling loader under `/storage/.cache/slot-bootloader-bootstage/`, plus a private Mac backup. Its bounded helper checks the exact spare SD identity, capacity, GPT and partition layout, completed provisioning and empty cartridge state before any write. Its `rollback` action restores the previous zero-delay loader. The original working card and eMMC are excluded. No full-card scan or loader read-back pass was performed.
+The spare installation retains both a previous-loader backup and the profiling loader under `/storage/.cache/slot-bootloader-bootstage/`, plus a separate host backup. Its bounded helper checks the exact spare SD identity, capacity, GPT and partition layout, completed provisioning and empty cartridge state before any write. Its `rollback` action restores the previous zero-delay loader. The original working card and eMMC are excluded. No full-card scan or loader read-back pass was performed.
 
 ## Clock interpretation
 
@@ -34,11 +34,11 @@ The two file reads include the U-Boot file-loading path, not just raw media tran
 
 ## Cold physical checks and recorder correction
 
-The user timed three cold boots at 5.58, 5.55 and 5.43 seconds Power-to-splash (median 5.55 seconds), with normal graphics in all three. Their matched Linux first-splash writes are 1.832121, 1.827792 and 1.835896 seconds. The original 45-second report-export timer did not fire during the first two boots; those Linux reports survive, but their U-Boot timing exports do not. Only the third cold boot has a complete retained BOOTSTAGE report, and its kernel file read is 2.481275 seconds. Do not present the warm measurements as three retained cold U-Boot traces.
+Manual stopwatch measurements recorded three cold boots at 5.58, 5.55 and 5.43 seconds Power-to-splash (median 5.55 seconds), with normal graphics in all three. Their matched Linux first-splash writes are 1.832121, 1.827792 and 1.835896 seconds. The original 45-second report-export timer did not fire during the first two boots; those Linux reports survive, but their U-Boot timing exports do not. Only the third cold boot has a complete retained BOOTSTAGE report, and its kernel file read is 2.481275 seconds. Do not present the warm measurements as three retained cold U-Boot traces.
 
 The timer has been replaced with a path-triggered export after Slot's first presented frame. The oneshot service uses `RemainAfterExit=yes` so the persistent marker cannot trigger repeated exports. This keeps export work after the first shelf frame and captures shorter test boots. The profiling build's physical median is 0.24 seconds above the earlier zero-delay sample; these small sequential manual samples do not establish profiling overhead or a new speed improvement. The previous intermittent cyan/striped splash is not explained by these normal checks and still prevents production qualification.
 
-The corrected path exporter passed a controlled warm restart (`3763c4dc`): first scene at 14.169430 s and exporter start at 14.203408 s, about 34 ms later. The report saved successfully, the service remained active/exited to prevent retriggering, and no systemd units failed. This extra restart is excluded from the three user-timed cold samples.
+The corrected path exporter passed a controlled warm restart: first scene at 14.169430 s and exporter start at 14.203408 s, about 34 ms later. The report saved successfully, the service remained active/exited to prevent retriggering, and no systemd units failed. This extra restart is excluded from the three manually timed cold samples.
 
 
 The optional SD-state variant builds with `SLOT_BOOTSTAGE_SD_PROBE=1 bash scripts/build-rg353v-bootstage.sh .build-rg353v/bootloader/sd-probe`. It captures read-only MMC/provider/DWMMC state around the kernel read. The recipe now retains 16 KiB of FDT tail space through the final shrink/re-reservation step so the later BOOTSTAGE export is complete. See [SD clock investigation](SD-CLOCK-PROFILE.md).

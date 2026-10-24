@@ -12,14 +12,14 @@ The Power press, orange LED/rumble, Linux entry, first visible splash and first 
 
 **About 4.2–4.3 seconds applies to booting the system from internal eMMC. Booting the same system from a microSD in TF1 averaged about 5.2 seconds on the tested card.** SD startup varies with card speed and quality; 5.2 seconds is a measured example, not a fixed time for every card.
 
-The 23 October 2026 comparison kept the same verified kernel, compressed OS, frontend, both emulators and settings. All 23 modules were installed, with the same 81-game library and active saves/states on TF2, **Save location: Game**, Developer Mode On and USB networking Off. TF1 was absent for the eMMC baseline. For the SD runs, the system was on TF1 and the eMMC boot entry was temporarily disabled to allow automatic SD restarts.
+The 23 October 2026 comparison kept the same verified kernel, compressed OS, frontend, both emulators and settings. All 23 modules were installed, with the same removable game library on TF2, **Save location: Game**, Developer Mode On and USB networking Off. TF1 was absent for the eMMC baseline. For the SD runs, the system was on TF1 and the eMMC boot entry was temporarily disabled to allow automatic SD restarts.
 
 | System boot medium | Run 1 | Run 2 | Run 3 | Average |
 | --- | ---: | ---: | ---: | ---: |
 | Internal eMMC | 4.310 s | 4.292 s | 4.284 s | **4.295 s** |
 | TF1 microSD | 5.286 s | 5.160 s | 5.125 s | **5.190 s** |
 
-The SD configuration averaged **895 ms longer (+20.8%)**. About 713 ms of that difference occurred during initramfs/systemd startup. These results compare the complete storage configurations, including TF1 presence, rather than isolating raw media transfer speed. A separate owner-performed eMMC boot recorded a Linux-to-shelf marker of 4.257 seconds; it is not included in the three-run average. [Exact timing data and conditions](media/boot-media-comparison-timing.json).
+The SD configuration averaged **895 ms longer (+20.8%)**. About 713 ms of that difference occurred during initramfs/systemd startup. These results compare the complete storage configurations, including TF1 presence, rather than isolating raw media transfer speed. A separate manually initiated eMMC boot recorded a Linux-to-shelf marker of 4.257 seconds; it is not included in the three-run average. [Exact timing data and conditions](media/boot-media-comparison-timing.json).
 
 All times above run from **Linux entry to the first shelf frame**. They exclude shutdown, U-Boot, SD fallback, the physical Power/rumble interval and Wi-Fi reconnection. All six measured restarts passed boot/software/storage checks, with games and save/state hashes unchanged. Network availability can follow the shelf; card performance, library size and selected features can affect startup.
 
@@ -27,7 +27,7 @@ All times above run from **Linux entry to the first shelf frame**. They exclude 
 
 This historical set predates the optional Schedutil Governor module. The separate SD measurements below include that installed module with its setting Off.
 
-This earlier eMMC development test used all 22 modules, an 81-game library on TF1, **Save location: Game**, Developer Mode On and USB networking Off:
+This earlier eMMC development test used all 22 modules, a removable game library on TF1, **Save location: Game**, Developer Mode On and USB networking Off:
 
 | Test | Run 1 | Run 2 | Run 3 | Average |
 | --- | ---: | ---: | ---: | ---: |
@@ -40,7 +40,7 @@ These are **Linux-entry-to-first-shelf controlled warm restarts**, not Power-but
 
 ## SD startup folder and scan refinement
 
-A later development comparison used the same TF1 system card, TF2 library with 81 games, remembered shelf/cartridge, all 23 modules, Save location Game, Developer Mode On and USB networking Off. The kernel, OS image, cores and governor setting were unchanged. Only the frontend and its source-change record were updated.
+A later development comparison used the same TF1 system card, TF2 game library, remembered shelf/cartridge, all 23 modules, Save location Game, Developer Mode On and USB networking Off. The kernel, OS image, cores and governor setting were unchanged. Only the frontend and its source-change record were updated.
 
 | Controlled warm restarts | Run 1 | Run 2 | Run 3 | Average |
 | --- | ---: | ---: | ---: | ---: |
@@ -53,13 +53,13 @@ Normal RG353V startup prepares configuration and migrates legacy settings before
 
 Every console's game directory is scanned afresh. Label directories and cartridge-shell settings are read only after finding a valid ROM that needs them. Empty consoles avoid those extra reads; adding a game still makes it appear on the next scan without rebuilding a persistent index. These changes do not optimize or replace users' artwork.
 
-These are **Linux-entry-to-first-scene software restarts on an SD system**, not a new eMMC benchmark or a physical Power/rumble measurement. Detailed capture ran only after the shelf and was kept in RAM until retrieval. The six boots verified the native normal-boot guards, 81 games and no failed units. A fresh-image installation and physical cold-start confirmation of this refinement remain separate qualification steps.
+These are **Linux-entry-to-first-scene software restarts on an SD system**, not a new eMMC benchmark or a physical Power/rumble measurement. Detailed capture ran only after the shelf and was kept in RAM until retrieval. The six boots verified the native normal-boot guards, complete library discovery and absence of failed units. A fresh-image installation and physical cold-start confirmation of this refinement remain separate qualification steps.
 
 ## Internal-library scan overlap
 
 The next frontend refinement also starts internal ROM/artwork discovery during graphics initialization. Separate workers scan the system library and removable libraries. The primary worker does not read cartridge settings: the main thread resolves those only after legacy migration. A boot-local directory snapshot is checked before reuse; changed directories, roots or mount lists and failed workers fall back to a fresh scan. No library index persists between boots, and the first shelf still waits for the complete merged library.
 
-A fresh before/after set kept the same TF1/TF2 layout, 81-game library, selected cartridge, modules and settings as above:
+A fresh before/after set kept the same TF1/TF2 layout, game library, selected cartridge, modules and settings as above:
 
 | Controlled warm restarts | Run 1 | Run 2 | Run 3 | Average |
 | --- | ---: | ---: | ---: | ---: |
@@ -74,7 +74,7 @@ These are software restarts from Linux entry to first scene, with heavy profilin
 
 A further frontend refinement prepares the application on a startup worker while SDL/DRM initializes, then queues pixels for the visible cartridges. The existing library merge, settings migration, remembered shelf and cache content checks are retained. Device/audio attachment and all GPU texture uploads stay on their original threads; the first shelf still waits for every visible cartridge. Adjacent shelves remain deferred until after the first display swap. A failed preparation worker falls back to the ordinary synchronous startup.
 
-The next controlled set used the same TF1 system, TF2 81-game library, selected GBC cartridge, modules and settings:
+The next controlled set used the same TF1 system, TF2 game library, selected GBC cartridge, modules and settings:
 
 | Software restarts | Run 1 | Run 2 | Run 3 | Average |
 | --- | ---: | ---: | ---: | ---: |
@@ -89,7 +89,7 @@ All six normal restarts passed the native guards and reached the populated shelf
 
 ## Additional storage experiments
 
-Two further candidates were tested with the same TF1 system card and TF2 81-game library. Each candidate had three controlled software restarts; both were compared with the same three-run baseline. The exFAT-probe trial used an OS delta retaining the active frontend/kernel; the parallel-scan trial used the restored baseline OS with only its frontend changed. Activation and restoration restarts are excluded below.
+Two further candidates were tested with the same TF1 system card and TF2 game library. Each candidate had three controlled software restarts; both were compared with the same three-run baseline. The exFAT-probe trial used an OS delta retaining the active frontend/kernel; the parallel-scan trial used the restored baseline OS with only its frontend changed. Activation and restoration restarts are excluded below.
 
 | Candidate | Run 1 | Run 2 | Run 3 | Average |
 | --- | ---: | ---: | ---: | ---: |
@@ -142,6 +142,6 @@ Rockchip USB loader recovery is a separate advanced procedure. It is not USB Sto
 
 ## Public candidate cold-start qualification
 
-The exact PUBLIC `rc-20261023-build4` Full installation was tested with its system on TF1 and the 81-game library on TF2, Save location **Game**, Developer Mode On and USB networking Off. The owner shut down through Slot, waited 15 seconds after the LED went out and powered on holding F. Three distinct retained reports measured **4.880, 5.090 and 4.865 seconds**, averaging **4.945 seconds** from Linux entry to first shelf swap. These exclude physical Power/rumble and the earlier bootloader interval.
+The exact PUBLIC `rc-20261023-build4` Full installation was tested with its system on TF1 and the game library on TF2, Save location **Game**, Developer Mode On and USB networking Off. The tester shut down through Slot, waited 15 seconds after the LED went out and powered on holding F. Three distinct retained reports measured **4.880, 5.090 and 4.865 seconds**, averaging **4.945 seconds** from Linux entry to first shelf swap. These exclude physical Power/rumble and the earlier bootloader interval.
 
-Every retained boot reached the shelf with all 81 games and no failed services; Wi-Fi/SSH recovered. The last local snapshot ran at 11 seconds, before Wi-Fi association, and a later check confirmed connectivity. Earlier missing timing reports were replaced with additional starts; no missing values were inferred. The delayed recorder ran after the shelf, saved locally rather than depending on Mac connectivity, and was removed after collection. These SD cold-start measurements complement the earlier eMMC/SD controlled-restart comparison; they are not a new eMMC timing result.
+Every retained boot reached the shelf with the complete game library and no failed services; Wi-Fi/SSH recovered. The last local snapshot ran at 11 seconds, before Wi-Fi association, and a later check confirmed connectivity. Earlier missing timing reports were replaced with additional starts; no missing values were inferred. The delayed recorder ran after the shelf, saved locally rather than depending on Mac connectivity, and was removed after collection. These SD cold-start measurements complement the earlier eMMC/SD controlled-restart comparison; they are not a new eMMC timing result.

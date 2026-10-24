@@ -4,7 +4,7 @@
   "target": "Earlier 4.5\u20134.6 s eMMC startup; current experiments use TF1 OS + TF2 library",
   "conditions": {
     "system": "TF1 SD",
-    "library": "TF2, 81 games",
+    "library": "Removable game library on TF2",
     "developer_mode": "On",
     "usb_networking": "Off",
     "schedutil": "Off",

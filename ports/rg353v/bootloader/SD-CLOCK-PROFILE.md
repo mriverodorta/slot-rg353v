@@ -32,7 +32,7 @@ A read-only O_DIRECT test read 29,360,128 aligned bytes from `/flash/KERNEL` in 
 
 ## Diagnostic deployment and validation
 
-Only the spare (`0x000002dc`) received the diagnostic loader. Its configuration, DDR/BL31 inputs, device trees, zero countdown and clock-selection logic match the preceding BOOTSTAGE build. New code reads selected mode, software state, clock-provider registers and DWMMC registers around `/KERNEL` loading. It does not set clocks or select transfer modes. The final loader is 9,991,168 bytes, 512 bytes larger than the original timing loader, within the existing pre-partition raw region. Prior loaders remain backed up on the handheld and Mac.
+Only the designated spare SD card received the diagnostic loader. Its configuration, DDR/BL31 inputs, device trees, zero countdown and clock-selection logic match the preceding BOOTSTAGE build. New code reads selected mode, software state, clock-provider registers and DWMMC registers around `/KERNEL` loading. It does not set clocks or select transfer modes. The final loader is 9,991,168 bytes, 512 bytes larger than the original timing loader, within the existing pre-partition raw region. Prior loaders remain backed up on the handheld and development host.
 
 The first SD metadata build exposed a BOOTSTAGE export-capacity defect: `image_setup_libfdt()` shrinks away relocation padding before the later export, so adding long metadata exhausted the remaining page padding. Slot still reached its shelf, but report export was incomplete and its reader correctly rejected the missing timing field. The diagnostic recipe now retains 16 KiB at the shrink step, inside the larger relocated FDT allocation, before LMB re-reservation. The final boot exports all 39 records, both SD snapshots, and has 15,924 unused FDT tail bytes. Its report service succeeds and no units fail. Linux reaches its first splash at 1.843819 s and shelf at 14.715325 s. These are diagnostic warm values, not new cold speed results.
 
@@ -54,22 +54,22 @@ The corrected candidate (`756e77cd9f89`, 9,991,680 bytes) passed three warm rest
 | Corrected warm restart 3 | 1.249014 s |
 | Corrected median | 1.248898 s |
 
-The measured warm kernel-read reduction is 1.232274 seconds / 49.665%, with effective throughput 23.825 MB/s against the derived 25 MB/s payload ceiling. The loader remains on the spare only, with the previous loader backed up on the device and Mac; no full-card scan or loader readback pass was used.
+The measured warm kernel-read reduction is 1.232274 seconds / 49.665%, with effective throughput 23.825 MB/s against the derived 25 MB/s payload ceiling. The loader remains on the spare only, with the previous loader backed up on the device and development host; no full-card scan or loader readback pass was used.
 
-The final Linux log contains an initial SD tuning error followed by successful SDR104 attachment, and a Wi-Fi SDIO timeout followed by recovery. Both patterns also occur in the retained pre-correction `aaf867ed` log. They are recorded rather than called error-free. The host harness compiles the actual quirk header and exercises guards, initialization requests and rejected/unexpected provider rates; it passes alongside ten parser and twelve workflow regressions. Two reviews cover the actual compiled diff, fallback/SPL scope and device identity, then the timing/register captures, backup/write bounds and historical log comparison. See [clock-correction validation](../sd-clock-fix-validation.json). The intermittent cyan/striped splash remains an unresolved production-qualification condition.
+The final Linux log contains an initial SD tuning error followed by successful SDR104 attachment, and a Wi-Fi SDIO timeout followed by recovery. Both patterns also occur in the retained pre-correction log. They are recorded rather than called error-free. The host harness compiles the actual quirk header and exercises guards, initialization requests and rejected/unexpected provider rates; it passes alongside ten parser and twelve workflow regressions. Two reviews cover the actual compiled diff, fallback/SPL scope and device identity, then the timing/register captures, backup/write bounds and historical log comparison. See [clock-correction validation](../sd-clock-fix-validation.json). The intermittent cyan/striped splash remains an unresolved production-qualification condition.
 
 ## Cold validation and timing origin
 
-All three cold boots retained 39 records and both matching 100 MHz input / derived 50 MHz card-clock snapshots. Reports are ordered by their device file timestamps, with the final report matching the live boot ID; the collector's initial batch order was filename order. The user confirms all three splashes looked normal.
+All three cold boots retained 39 records and both matching 100 MHz input / derived 50 MHz card-clock snapshots. Reports are ordered by their device file timestamps, with the final report matching the live boot ID; the collector's initial batch order was filename order. All three splashes were visually checked and appeared normal.
 
-| Cold run | Rumble → splash, user timer | Kernel read, BOOTSTAGE | Linux entry → splash |
+| Cold run | Rumble → splash, manual timer | Kernel read, BOOTSTAGE | Linux entry → splash |
 | --- | ---: | ---: | ---: |
-| 1 (`5bc17b47`) | 4.18 s | 1.248703 s | 1.850683 s |
-| 2 (`e4e2ef83`) | 4.28 s | 1.249019 s | 1.835170 s |
-| 3 (`6fd292d0`) | 4.18 s | 1.248703 s | 1.833145 s |
+| 1 | 4.18 s | 1.248703 s | 1.850683 s |
+| 2 | 4.28 s | 1.249019 s | 1.835170 s |
+| 3 | 4.18 s | 1.248703 s | 1.833145 s |
 
-The cold kernel-read median is 1.248703 s, down 1.232572 s from the prior complete cold trace's 2.481275 s. The current device has no failed services and SSH is reachable. Three normal cold displays do not explain or permanently clear the historical intermittent stripe fault.
+The cold kernel-read median is 1.248703 s, down 1.232572 s from the prior complete cold trace's 2.481275 s. The final validation found no failed services and confirmed SSH connectivity. Three normal cold displays do not explain or permanently clear the historical intermittent stripe fault.
 
-The user explicitly confirms the 4.xx stopwatch readings start at the orange LED/rumble. The initial button press lights the LED red about one second earlier. Therefore the rumble-to-splash median is 4.18 s and estimated button-to-splash median is approximately 5.18 s; the extra second is an estimate, not a measured ROM/DDR/power-sequencing split. Earlier 5.58/5.55/5.43 readings were requested and labeled Power-to-splash, so directly subtracting those from the new rumble-based readings would mix timing origins. The 1.233 s kernel-read improvement is independently measured with the same operation markers.
+The 4.xx stopwatch readings start at the orange LED/rumble. The initial button press lights the LED red about one second earlier. Therefore the rumble-to-splash median is 4.18 s and estimated button-to-splash median is approximately 5.18 s; the extra second is an estimate, not a measured ROM/DDR/power-sequencing split. Earlier 5.58/5.55/5.43 readings were requested and labeled Power-to-splash, so directly subtracting those from the new rumble-based readings would mix timing origins. The 1.233 s kernel-read improvement is independently measured with the same operation markers.
 
 Within the cold full-U-Boot epoch, early initialization to relocation is about 750.5 ms; orange/rumble start to the final handoff marker is about 1,707.5 ms. That latter interval includes the 200.1 ms rumble, 229.6 ms bootflow scan, 1,248.7 ms kernel read and 10.1 ms DTB read. Linux entry to splash is separately about 1,835.2 ms. These values locate work, but the handoff marker precedes export/cleanup and the clock origins differ: they are not a complete additive button-to-splash timeline.

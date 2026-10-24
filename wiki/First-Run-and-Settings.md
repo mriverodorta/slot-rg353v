@@ -56,7 +56,7 @@ Controls groups Console Buttons, Shortcuts and Shelf Buttons. Choose a binding, 
 
 An ordinary boot starts with optional connections and services off even if you used them previously. Install the desired connection module, then turn it on in Connections when needed. Installing Wi-Fi or SSH does not enable it automatically.
 
-Developer Mode is the explicit exception for development across restarts. It requires SSH and Wi-Fi or USB Networking. Leave it Off for the ordinary offline experience. Public images contain no project owner's Wi-Fi profile or development SSH identity; configure your own access. [Connections](Connections.md).
+Developer Mode is the explicit exception for development across restarts. It requires SSH and Wi-Fi or USB Networking. Leave it Off for the ordinary offline experience. Public images contain no preconfigured personal Wi-Fi profile or development SSH identity; configure your own access. [Connections](Connections.md).
 
 ## Check the result
 

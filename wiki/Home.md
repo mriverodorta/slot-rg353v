@@ -37,4 +37,4 @@ The walkthrough uses the actual installer renderer. Feature choices and installa
 
 These files are the version-controlled user guide and can always be read alongside the code. The separate GitHub Wiki uses the same pages, with links rewritten for wiki navigation.
 
-Screens are native **640×480** renders of the pinned frontend/device layer, using games and cartridge artwork from the owner's collection. Connection details and storage capacities are examples. No personal Wi-Fi credentials, SSH keys, ROMs, BIOS or save files are included. See [media provenance and reproduction](Media-Production.md).
+Screens are native **640×480** renders of the pinned frontend/device layer, with illustrative game images and cartridge artwork. Connection details and storage capacities are examples. No personal Wi-Fi credentials, SSH keys, ROMs, BIOS or save files are included. See [media provenance and reproduction](Media-Production.md).

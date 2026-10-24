@@ -7,8 +7,8 @@ The guide and its assets are version-controlled in `wiki/`. Markdown links use r
 | Asset | How it is made |
 | --- | --- |
 | Setup PNGs | The actual `slot-setup-ui.py` Canvas and Model with example storage capacities and public feature defaults |
-| Settings/shelf PNGs | The pinned Slot frontend plus RG353V layer, running with SDL/GLES in a disposable headless container; real cartridge artwork from the owner's collection |
-| Connection/diagnostic PNGs | The same UI, supplied with isolated example service responses; no live credentials or owner device data |
+| Settings/shelf PNGs | The pinned Slot frontend plus RG353V layer, running with SDL/GLES in a disposable headless container; cartridge artwork supplied for documentation illustrations |
+| Connection/diagnostic PNGs | The same UI, supplied with isolated example service responses; no live credentials or identifying device data |
 | Gameplay/Gallery PNGs | Zelda, Metroid Fusion and Golden Sun run through the qualified mGBA core with a read-only source library and isolated saves/states; no ROMs, BIOS or save files are bundled |
 | Setup GIF/MP4 | Native setup renders with scripted choices and condensed example progress; installation duration is not measured |
 | Boot GIF/MP4 | Actual splash renderer and guide shelf, replaying captured framebuffer/GLES percentage changes and timestamps; reconstructed images, not camera footage |
@@ -16,7 +16,7 @@ The guide and its assets are version-controlled in `wiki/`. Markdown links use r
 
 The animations contain no audio, title cards or timing labels over the device UI. Their captions and this provenance explain how they were made. The 640×480 frames match the panel's pixel dimensions; they do not reproduce its optical brightness, reflections or camera exposure.
 
-The requested GBA illustrations use **Perfect overlays + Shimmerless**. They therefore include Perfect artwork in the rendered screenshots; the original/adaptation ownership and [no-license-specified notice](../CREDITS.md) apply to these assets as well. Nothing has been uploaded.
+The GBA illustrations use **Perfect overlays + Shimmerless**. They therefore include Perfect artwork in the rendered screenshots; the original/adaptation ownership and [no-license-specified notice](../CREDITS.md) apply to these assets as well. Published illustrations do not include the underlying game or save files.
 
 ## Generate assets
 
@@ -69,7 +69,7 @@ python3 scripts/check-rg353v-wiki.py
 
 The generated `media/manifest.json` records source pins, per-file hashes, sizes, dimensions and animation durations. It also records hashes of the capture scripts, documentation service fixtures, setup renderer/font and module catalog, so changes to those inputs cannot silently leave stale media. The checker verifies Markdown targets, image dimensions, GIF timing, module-help coverage and the manifest. Inspect the rendered images as well; a successful build does not establish readable text or correct navigation.
 
-Do not copy private experiment captures directly into the guide. Check for passwords, SSIDs, keys, host fingerprints and device identifiers. The owner has requested the game and cartridge-art illustrations used here; the underlying games/art retain their owners' rights, and the screenshots do not grant redistribution rights to ROMs or BIOS. Use illustrative addresses. Retain clean-install, source-license and platform qualification notes; attractive screenshots do not replace those checks.
+Do not copy private experiment captures directly into the guide. Check for passwords, SSIDs, keys, host fingerprints and device identifiers. The underlying games/art retain their owners' rights, and the screenshots do not grant redistribution rights to ROMs or BIOS. Use illustrative addresses. Retain clean-install, source-license and platform qualification notes; attractive screenshots do not replace those checks.
 
 ## Prepare the GitHub Wiki
 

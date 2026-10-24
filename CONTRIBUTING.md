@@ -12,4 +12,6 @@ Changes to an installer choice must agree across the module catalog, installatio
 
 Never commit ROMs, BIOS files, personal saves, network profiles, passwords, SSH identities, machine-specific logs, build caches or generated disk images. `resources/`, `localdev/` and `release/` are ignored. Do not force-add them. Report bugs in this project's issue tracker once its repository is published; do not send fork-specific failures to upstream without reproducing them there.
 
-Include upstream attribution and license notices for code and artwork. See [CREDITS.md](CREDITS.md); Perfect's creators retain copyright and no explicit license was found; retain the owner's required attribution/no-license-specified notice.
+Public documentation and release notes must use general examples: omit personal library inventories/counts, save-file counts, collection ownership, actual network names/addresses, hardware serials and local computer paths. Keep private qualification evidence under ignored `resources/`; publish only the technical conditions and measurements needed to explain results.
+
+Include upstream attribution and license notices for code and artwork. See [CREDITS.md](CREDITS.md); Perfect's creators retain copyright and no explicit license was found; retain the attribution/no-license-specified notice.

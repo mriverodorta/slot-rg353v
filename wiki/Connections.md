@@ -59,7 +59,7 @@ Wi-Fi can stay Off during USB SSH/SMB. Enable each installed service separately 
 
 ![SSH settings](images/features/ssh.png)
 
-Enable Connections → SSH and use the authentication information shown there. For public installations, import your own public key or use the configured password path; the developer's key is absent. Verify the device host-key fingerprint rather than disabling SSH host checks.
+Enable Connections → SSH and use the authentication information shown there. For public installations, import your own public key or use the configured password path; preconfigured developer keys are absent. Verify the device host-key fingerprint rather than disabling SSH host checks.
 
 ```sh
 ssh root@DEVICE_IP
@@ -67,7 +67,7 @@ ssh root@DEVICE_IP
 
 SSH provides system access. Disable it when not needed. USB SSH does not require a functioning Wi-Fi adapter.
 
-To import a public key, copy your `.pub` file into `Config/SSH` on SLOT, choose **Import Public Key**, check the displayed fingerprint and confirm. Import the public half only; your private key stays on the computer. **Set Password** is the separate password path. Public release images do not contain the owner's development key or saved Wi-Fi credentials.
+To import a public key, copy your `.pub` file into `Config/SSH` on SLOT, choose **Import Public Key**, check the displayed fingerprint and confirm. Import the public half only; your private key stays on the computer. **Set Password** is the separate password path. Public release images do not contain preconfigured development keys or saved Wi-Fi credentials.
 
 ![Set an SSH password](images/features/ssh-set-password.png)
 

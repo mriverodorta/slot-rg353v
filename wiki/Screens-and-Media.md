@@ -1,6 +1,6 @@
 # Screens and videos
 
-All images are native 640×480 renders of the installer or frontend. Games and cartridge artwork come from the owner’s collection; capacities, network addresses and service readings are illustrative. No ROMs or saves are bundled. See [media provenance](Media-Production.md).
+All images are native 640×480 renders of the installer or frontend. Game and cartridge-art illustrations are included as examples; capacities, network addresses and service readings are illustrative. No ROMs or saves are bundled. See [media provenance](Media-Production.md).
 
 ## Animations
 
@@ -866,6 +866,6 @@ The remaining captures show each feature group, selection example, preset review
 
 ![Scanning SD card for games](images/features/sd-scanning.png)
 
-Native 640×480 frontend preview using existing collection artwork. Insertion feedback occupies the game/console name area and fades after discovery.
+Native 640×480 frontend preview using illustrative cartridge artwork. Insertion feedback occupies the game/console name area and fades after discovery.
 
 </details>

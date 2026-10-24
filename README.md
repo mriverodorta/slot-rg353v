@@ -65,7 +65,7 @@ This embeds configured Wi-Fi profiles and the SSH **public** key for your own ha
 
 Start at the [wiki index](wiki/Home.md): [setup modules](wiki/Setup-and-Modules.md), [controls](wiki/Controls.md), [menus](wiki/Menus.md), [saves](wiki/Saves-and-States.md), [screen effects](wiki/Screen-and-Overlays.md), [connections](wiki/Connections.md), [screenshots](wiki/Screenshots-and-Gallery.md), [troubleshooting](wiki/Troubleshooting.md) and [contributing](CONTRIBUTING.md).
 
-Current startup is **about 4.2–4.3 seconds when the system boots from internal eMMC**, versus **about 5.2 seconds from the tested TF1 microSD**; SD timing depends on card speed and quality. The latest three controlled restarts averaged **4.295 s on eMMC** and **5.190 s on SD**, with the same software, all 23 modules and the 81-game library/active saves on TF2. These measure Linux entry to the first shelf frame and exclude the physical Power/rumble and bootloader interval. See [startup measurements and conditions](wiki/Boot-and-Recovery.md#latest-controlled-restarts).
+Current startup is **about 4.2–4.3 seconds when the system boots from internal eMMC**, versus **about 5.2 seconds from the tested TF1 microSD**; SD timing depends on card speed and quality. The latest three controlled restarts averaged **4.295 s on eMMC** and **5.190 s on SD**, with the same software, all 23 modules and a removable game library on TF2. These measure Linux entry to the first shelf frame and exclude the physical Power/rumble and bootloader interval. See [startup measurements and conditions](wiki/Boot-and-Recovery.md#latest-controlled-restarts).
 
 ## Credits and licenses
 

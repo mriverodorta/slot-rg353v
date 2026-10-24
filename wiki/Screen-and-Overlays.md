@@ -37,7 +37,7 @@ Open **Screen → Overlays**. **Overlay** enables/disables the border; **Overlay
 
 An overlay is an image drawn with the game. Slot-style borders primarily decorate unused space. Perfect artwork can also add a pixel-grid/display appearance over the game itself. Combining that with a strong LCD shader stacks effects. For comparing Perfect to its source setup, start with the shader Off, then adjust deliberately. The screenshot options let you choose which layers to include.
 
-Perfect's original and adaptation credits, copyright ownership and no-license-specified status are documented in [CREDITS](../CREDITS.md). The pack is retained at the project owner's direction; this does not establish creator permission or place its artwork under the project's GPL license. The shaders have separate provenance and terms.
+Perfect's original and adaptation credits, copyright ownership and no-license-specified status are documented in [CREDITS](../CREDITS.md). The pack is retained as a project packaging decision; this does not establish creator permission or place its artwork under the project's GPL license. The shaders have separate provenance and terms.
 
 To compare the Retro Game Corps/Perfect presentation, choose Perfect and start with the shader **Off**. For your own Slot-style combination, switch to Slot and compare Sharp LCD, LCD3x or a clean Shimmerless picture. A Perfect grid is itself part of the picture effect; it is not only a decorative logo strip. Settings pages remain readable and save/load notifications render above the effect.
 
@@ -45,7 +45,7 @@ Use [Retro Game Corps' guide](https://retrogamecorps.com/2024/09/01/guide-shader
 
 ## GBA examples: Perfect and Shimmerless
 
-The illustrations below use **Perfect overlay + Shimmerless**. They show actual games from the owner's collection running through the qualified mGBA core in the documentation capture environment; they are picture examples, not device performance measurements.
+The illustrations below use **Perfect overlay + Shimmerless**. They show games running through the qualified mGBA core in the documentation capture environment; they are picture examples, not device performance measurements.
 
 ![Zelda with Perfect and Shimmerless](images/features/game-zelda.png)
 

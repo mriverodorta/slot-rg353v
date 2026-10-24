@@ -24,7 +24,7 @@ The provisioning schema is documented by `ports/rg353v/image/slot-setup-debug.py
 }
 ```
 
-This is a schema illustration, not a usable credential profile. Protect the real file and server key with owner-only permissions. The existing owner's profile has already been moved here without duplicating its contents. No real credential is included in this guide or the repository.
+This is a schema illustration, not a usable credential profile. Protect the real file and server key with owner-only permissions. No real credential is included in this guide or the repository.
 
 ## Build
 
@@ -39,6 +39,6 @@ Build output contains `PRIVATE` in its filename. After a successful build the co
 
 ## Library and testing
 
-There is one canonical private library, addressed by the compatibility path `.private-rg353v/content/` and physically under `resources/.private-rg353v/content/`. Use `python3 scripts/rg353v-personal-library.py pull` while the game is ejected before and after device tests. History preserves changed saves. Do not overwrite newer imported local saves with stale device copies; the pending-restore manifest protects them.
+For local hardware tests, keep a single content backup outside Git. The backup helper uses `.private-rg353v/content/`, physically under `resources/.private-rg353v/content/`. Use `python3 scripts/rg353v-personal-library.py pull` while the game is ejected before and after device tests. History preserves changed saves. Do not overwrite newer imported local saves with stale device copies; the pending-restore manifest protects them.
 
 Default provisioning is SD-only. eMMC writes require explicit authorization and the exact device identity. Keep silent test audio, isolated save/state output, F-held recovery and persistent-RAM/watchdog evidence available. Do not use the real library as disposable test data.
