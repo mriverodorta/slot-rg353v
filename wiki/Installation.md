@@ -2,19 +2,21 @@
 
 ## Before starting: stock Android and the legacy bootloader
 
-**An RG353V with stock Android needs additional preparation.** [ROCKNIX's RG353 device guide](https://rocknix.org/devices/anbernic/rg353pmvvs/#installation) says its legacy eMMC bootloader is unsupported and requires erasing Android before SD boot. This applies even if you intend to keep Slot on SD.
+**If your RG353V still has Android, first follow the original [ROCKNIX RG353V installation instructions](https://rocknix.org/devices/anbernic/rg353pmvvs/#installation) and get ROCKNIX booting successfully on the device. Then return here to flash and install Slot.** Confirming ROCKNIX boots from SD is sufficient; you do not need to install ROCKNIX onto eMMC first.
 
-The upstream procedure is:
+The upstream guide covers the incompatible legacy bootloader and Android removal. That preparation erases internal Android/data; back up first and follow the device-specific instructions directly. Do not repeat it on an already working compatible Linux installation. ROCKNIX's separate [generic internal installer](https://rocknix.org/play/installtointernal/) is for listed Qualcomm platforms, not the RG353V/RK3566.
 
-1. Install ADB on the computer. Remove SD cards and enter Android recovery with **Power + Volume Down**.
-2. Connect the handheld's **DC USB-C** port to the computer and run `adb root`.
-3. Back up internal storage before erasing it; the guide uses `adb pull /dev/block/mmcblk0 android.img`.
-4. Follow the linked RG353-specific erase procedure. It targets the **entire internal device**, destroying Android and internal data, despite calling it an Android-partition wipe. It is not a factory reset.
-5. Upstream then inserts a prepared ROCKNIX SD and reboots.
+Our installer starts only after the Slot TF1 starter boots. Current clean-install qualification began with a compatible internal Linux boot chain; direct conversion from stock Android has not been separately qualified.
 
-Slot's installer can replace eMMC only **after its TF1 starter has booted**. It cannot clear this prerequisite before startup. The current release's clean-install tests began with an already compatible internal boot chain; a stock-Android-to-Slot conversion has not been separately qualified. Do not erase a working Linux installation just to repeat Android preparation.
+### Included eMMC bootloader and F-held recovery
 
-The **F-held TF1 override belongs to Slot's installed loader**; do not assume stock Android provides it. ROCKNIX's separate [generic internal installer](https://rocknix.org/play/installtointernal/) lists Qualcomm platforms, not the RG353V/RK3566, and is not this device's procedure. Once Slot setup is running, use its own destination chooser below.
+The release image includes our validated RG353V U-Boot loader. Choosing **Install to internal storage** installs that loader onto eMMC after the system files have been verified, then reads the written loader back and checks its checksum. This replaces the previous writable internal bootloader.
+
+- **Normal Power-on:** try Slot on eMMC first, with no boot-menu countdown.
+- **Hold F before Power-on:** try the bootable TF1 SD first; keep F held until its splash/setup appears.
+- If the preferred boot flow returns without booting, the loader tries the other medium.
+
+Choosing **Set up this SD card** does not replace the internal bootloader. The F shortcut requires our loader to have been installed on eMMC; it is not assumed on factory firmware. Loader selection avoids an intentional boot delay, but storage and system startup still take time; the timings below start at Linux entry.
 
 ## Choose a destination
 

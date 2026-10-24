@@ -10,7 +10,7 @@ The [illustrated user guide](wiki/Home.md) covers every setup page, optional mod
 
 ## Install
 
-**Stock Android prerequisite:** the RG353V legacy bootloader needs preparation before mainline Linux SD boot. Read the [RG353V-specific Android/bootloader instructions and qualification limits](wiki/Installation.md#before-starting-stock-android-and-the-legacy-bootloader) first. Installing from an already compatible Linux system is a different starting point.
+**If your RG353V still has Android, follow the original [ROCKNIX RG353V instructions](https://rocknix.org/devices/anbernic/rg353pmvvs/#installation) and get ROCKNIX booting first. Then return here to install Slot.** See our [prerequisites and included eMMC/F-held recovery loader](wiki/Installation.md#before-starting-stock-android-and-the-legacy-bootloader).
 
 1. Download this project's compressed `.img.gz` from [GitHub Releases](https://github.com/mriverodorta/slot-rg353v/releases/latest). Use the **public release**, not an image marked `PRIVATE`.
 2. Flash it to a spare microSD with [balenaEtcher](https://etcher.balena.io/). Select the compressed image directly. Flashing erases the selected card.
